@@ -33,6 +33,14 @@ Run a real MAGFiLO validation subset:
 python -m solarfil.evaluate data/official/MAGFiLO_1.0_Kaggle_2026 --limit 20
 ```
 
+Generate the Kaggle submission:
+
+```bash
+python -m solarfil.infer \
+  data/official/MAGFiLO_1.0_Kaggle_2026/test/test_images \
+  outputs/submission.csv
+```
+
 ## Next experiments
 
 - Tune threshold and minimum area by observatory/site.
