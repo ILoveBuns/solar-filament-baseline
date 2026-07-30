@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections import deque
-
 import numpy as np
+from scipy import ndimage
 
 
 def radial_normalize(image: np.ndarray, bins: int = 96) -> tuple[np.ndarray, np.ndarray]:
@@ -24,40 +23,46 @@ def radial_normalize(image: np.ndarray, bins: int = 96) -> tuple[np.ndarray, np.
     return normalized, disk
 
 
-def _components(binary: np.ndarray, min_area: int) -> list[np.ndarray]:
-    seen = np.zeros(binary.shape, dtype=bool)
-    components: list[np.ndarray] = []
-    height, width = binary.shape
-    for y, x in zip(*np.nonzero(binary)):
-        if seen[y, x]:
-            continue
-        queue, pixels = deque([(y, x)]), []
-        seen[y, x] = True
-        while queue:
-            py, px = queue.popleft()
-            pixels.append((py, px))
-            for ny, nx in ((py - 1, px), (py + 1, px), (py, px - 1), (py, px + 1)):
-                if 0 <= ny < height and 0 <= nx < width and binary[ny, nx] and not seen[ny, nx]:
-                    seen[ny, nx] = True
-                    queue.append((ny, nx))
-        if len(pixels) >= min_area:
-            mask = np.zeros(binary.shape, dtype=np.uint8)
-            ys, xs = zip(*pixels)
-            mask[ys, xs] = 1
-            components.append(mask)
-    return components
+def _components(binary: np.ndarray, min_area: int, max_instances: int) -> tuple[np.ndarray, list[int]]:
+    labels, count = ndimage.label(binary)
+    sizes = np.bincount(labels.ravel())
+    keep = sorted(
+        (index for index in range(1, count + 1) if sizes[index] >= min_area),
+        key=lambda index: int(sizes[index]),
+        reverse=True,
+    )[:max_instances]
+    return labels, keep
 
 
 def segment_instances(
     image: np.ndarray,
-    darkness_quantile: float = 0.08,
+    darkness_quantile: float = 0.25,
     min_area: int = 24,
-    max_normalized_intensity: float = 0.78,
+    max_normalized_intensity: float = 0.95,
+    max_instances: int = 64,
 ) -> list[np.ndarray]:
+    labels, keep = segment_labels(
+        image,
+        darkness_quantile=darkness_quantile,
+        min_area=min_area,
+        max_normalized_intensity=max_normalized_intensity,
+        max_instances=max_instances,
+    )
+    return [(labels == index).astype(np.uint8) for index in keep]
+
+
+def segment_labels(
+    image: np.ndarray,
+    darkness_quantile: float = 0.25,
+    min_area: int = 24,
+    max_normalized_intensity: float = 0.95,
+    max_instances: int = 64,
+) -> tuple[np.ndarray, list[int]]:
+    """Memory-efficient variant returning one label map and selected IDs."""
     normalized, disk = radial_normalize(image)
     threshold = min(
         float(np.quantile(normalized[disk], darkness_quantile)),
         max_normalized_intensity,
     )
     candidates = (normalized <= threshold) & disk
-    return _components(candidates, min_area)
+    return _components(candidates, min_area, max_instances)

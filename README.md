@@ -11,6 +11,10 @@ A fast, interpretable baseline for the
 4. Minimum-area filtering suppresses noise and fragmentation.
 5. `pycocotools` writes the required compressed COCO RLE counts.
 
+The initial real-data defaults use the darkest 25% of the radially normalized
+solar disk, cap normalized intensity at 0.95, and retain up to 64 largest
+components. They are baseline parameters, not leaderboard-tuned values.
+
 This is deliberately a classical baseline: it is CPU-friendly, exposes failure
 modes, and can generate pseudo-labels or a post-processing prior for a U-Net.
 
@@ -22,6 +26,12 @@ python -m unittest discover -s tests -v
 
 Tests cover morphology recovery on a synthetic limb-darkened disk and exact
 COCO RLE round-trip.
+
+Run a real MAGFiLO validation subset:
+
+```bash
+python -m solarfil.evaluate data/official/MAGFiLO_1.0_Kaggle_2026 --limit 20
+```
 
 ## Next experiments
 
@@ -35,4 +45,3 @@ No synthetic score is represented as an official leaderboard score.
 ## License
 
 MIT.
-
