@@ -18,6 +18,13 @@ components. They are baseline parameters, not leaderboard-tuned values.
 This is deliberately a classical baseline: it is CPU-friendly, exposes failure
 modes, and can generate pseudo-labels or a post-processing prior for a U-Net.
 
+An experimental, GPU-oriented torchvision Mask R-CNN pipeline is provided in
+[`kaggle/train_maskrcnn.py`](kaggle/train_maskrcnn.py), with run instructions in
+[`kaggle/README.md`](kaggle/README.md). It collapses chirality categories into one filament
+class, selects one deterministic annotation record per duplicated physical
+image, and uses a stable year/observatory-stratified validation split. This
+avoids introducing the AGPL-licensed Ultralytics runtime into this MIT project.
+
 ## Test
 
 ```bash
@@ -50,7 +57,8 @@ python -m solarfil.infer \
 
 - Tune threshold and minimum area by observatory/site.
 - Add orientation-aware closing to reconnect thin barbs.
-- Train a Flat U-Net on radial-normalized crops.
+- Train and threshold-sweep the torchvision Mask R-CNN on a Kaggle GPU.
+- Compare Mask R-CNN with a semantic U-Net plus watershed instance recovery.
 - Match predicted/true instances with Hungarian Dice for local validation.
 
 No synthetic score is represented as an official leaderboard score.

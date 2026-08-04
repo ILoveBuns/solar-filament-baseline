@@ -1,0 +1,43 @@
+# Kaggle GPU training
+
+This directory contains the experimental torchvision Mask R-CNN route. It is
+kept separate from the CPU classical baseline because training requires a GPU
+and PyTorch/torchvision.
+
+## Why this route
+
+- Native instance masks, so the model does not need connected components to
+  invent filament identities.
+- COCO-pretrained Mask R-CNN is available from torchvision's documented weight
+  registry.
+- PyTorch and torchvision use BSD-style licensing; this avoids adding the
+  AGPL-licensed Ultralytics runtime to this MIT repository.
+- Predictions are capped at 32 per image and validation reports the
+  prediction/truth ratio alongside matched Dice.
+
+The pretrained weights were trained on COCO. Their public provenance and use
+must be disclosed in the final technical report.
+
+## Kaggle notebook commands
+
+Enable a GPU and Internet in a private Kaggle notebook, then run:
+
+```bash
+git clone https://github.com/ILoveBuns/solar-filament-baseline.git
+cd solar-filament-baseline
+python -m pip install -q -e .
+
+ROOT=/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026
+python kaggle/train_maskrcnn.py train "$ROOT" \
+  --epochs 12 \
+  --checkpoint /kaggle/working/maskrcnn-best.pt
+
+python kaggle/train_maskrcnn.py predict "$ROOT" \
+  --checkpoint /kaggle/working/maskrcnn-best.pt \
+  --output /kaggle/working/submission-maskrcnn.csv
+```
+
+Do not submit the CSV until the epoch metrics, row count, image coverage and
+RLE round-trip checks have been reviewed. Record the Kaggle image, torch,
+torchvision, CUDA and GPU versions in the run notes for reproducibility.
+

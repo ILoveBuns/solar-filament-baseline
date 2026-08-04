@@ -5,12 +5,45 @@ from pathlib import Path
 import numpy as np
 
 from solarfil.metrics import dice
+from solarfil.coco_data import (
+    greedy_scores_from_matrix,
+    select_best_image_records,
+    stable_stratified_split,
+)
 from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label_dice
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, write_submission
 
 
 class PipelineTest(unittest.TestCase):
+    def test_selects_most_complete_duplicate_annotation_record(self):
+        coco = {
+            "images": [
+                {"id": 1, "file_name": "20140101000000Mh.jpeg"},
+                {"id": 2, "file_name": "20140101000000Mh.jpeg"},
+            ],
+            "annotations": [
+                {"image_id": 1, "area": 50},
+                {"image_id": 2, "area": 40},
+                {"image_id": 2, "area": 20},
+            ],
+        }
+        self.assertEqual(2, select_best_image_records(coco)["20140101000000Mh.jpeg"]["id"])
+
+    def test_stable_split_is_disjoint_and_order_independent(self):
+        files = [f"2014{month:02d}01000000{site}.jpeg" for month in range(1, 7) for site in ("Mh", "Ch")]
+        train_a, valid_a = stable_stratified_split(files, seed=7)
+        train_b, valid_b = stable_stratified_split(list(reversed(files)), seed=7)
+        self.assertEqual((train_a, valid_a), (train_b, valid_b))
+        self.assertFalse(set(train_a) & set(valid_a))
+        self.assertEqual(set(files), set(train_a) | set(valid_a))
+
+    def test_greedy_scores_from_precomputed_matrix(self):
+        matrix = np.array([[0.9, 0.8, 0.0], [0.7, 0.1, 0.6]])
+        scores = greedy_scores_from_matrix(matrix, truth_count=3)
+        self.assertEqual(3, len(scores))
+        self.assertAlmostEqual(1.5, sum(scores))
+
     def test_detects_dark_connected_filament(self):
         size = 128
         yy, xx = np.indices((size, size))
