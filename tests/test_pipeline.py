@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from solarfil.metrics import dice
+from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label_dice
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, write_submission
 
@@ -32,7 +33,33 @@ class PipelineTest(unittest.TestCase):
             counts = path.read_text().splitlines()[1].split(",", 1)[1]
             np.testing.assert_array_equal(mask, decode_mask(counts, mask.shape))
 
+    def test_fast_label_matching_matches_mask_reference(self):
+        labels = np.zeros((12, 12), dtype=np.int32)
+        labels[1:4, 1:5] = 1
+        labels[7:11, 6:10] = 2
+        truths = [
+            np.pad(np.ones((3, 3), dtype=np.uint8), ((1, 8), (2, 7))),
+            np.pad(np.ones((3, 4), dtype=np.uint8), ((7, 2), (6, 2))),
+        ]
+        expected = matched_dice([(labels == 1), (labels == 2)], truths)
+        actual = matched_label_dice(labels, [1, 2], truths)
+        self.assertEqual(len(actual), len(expected))
+        self.assertTrue(np.allclose(sorted(actual), sorted(expected)))
+
+    def test_overlap_diagnostics_detect_fragmentation_and_merging(self):
+        labels = np.zeros((8, 12), dtype=np.int32)
+        labels[1:3, 1:5] = 1
+        labels[3:5, 1:5] = 2
+        labels[1:5, 7:11] = 3
+        truths = [
+            (np.pad(np.ones((4, 4), dtype=np.uint8), ((1, 3), (1, 7)))),
+            (np.pad(np.ones((4, 2), dtype=np.uint8), ((1, 3), (7, 3)))),
+            (np.pad(np.ones((4, 2), dtype=np.uint8), ((1, 3), (9, 1)))),
+        ]
+        _, diagnostics = label_overlap_metrics(labels, [1, 2, 3], truths, 0.1)
+        self.assertEqual(1, diagnostics["one_to_many_truths"])
+        self.assertEqual(1, diagnostics["many_to_one_predictions"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

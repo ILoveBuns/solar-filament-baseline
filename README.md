@@ -33,6 +33,11 @@ Run a real MAGFiLO validation subset:
 python -m solarfil.evaluate data/official/MAGFiLO_1.0_Kaggle_2026 --limit 20
 ```
 
+The report includes a prediction/truth count ratio, unmatched instances, and
+one-to-many / many-to-one overlap diagnostics. These expose over-segmentation
+that a matched-Dice-only summary can hide; they are not claimed to reproduce
+the competition's hidden fragmentation analysis.
+
 Generate the Kaggle submission:
 
 ```bash
