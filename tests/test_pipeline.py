@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from itertools import product
 from pathlib import Path
 
 import numpy as np
@@ -64,6 +65,55 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(1.0, results[0]["mean_matched_dice"])
         self.assertEqual(1.0, results[0]["prediction_truth_ratio"])
         self.assertEqual(1.0, results[0]["panoptic_quality"])
+
+    def test_optimized_threshold_sweep_matches_individual_scoring(self):
+        rng = np.random.default_rng(7)
+        probabilities = rng.random((4, 9, 8))
+        truths = rng.random((3, 9, 8)) > 0.72
+        confidence = np.array([0.2, 0.45, 0.7, 0.95])
+        score_thresholds = [0.1, 0.5, 0.9]
+        mask_thresholds = [0.35, 0.6]
+        min_areas = [1, 12]
+        actual = sweep_thresholds(
+            [(confidence, probabilities, truths)],
+            score_thresholds,
+            mask_thresholds,
+            min_areas,
+        )
+        by_configuration = {
+            (row["score_threshold"], row["mask_threshold"], row["min_area"]): row
+            for row in actual
+        }
+        for configuration in product(score_thresholds, mask_thresholds, min_areas):
+            score_threshold, mask_threshold, min_area = configuration
+            expected = score_instances(
+                confidence,
+                probabilities,
+                truths,
+                score_threshold,
+                mask_threshold,
+                min_area,
+            )
+            row = by_configuration[configuration]
+            self.assertAlmostEqual(
+                expected["dice_sum"] / expected["truth_count"],
+                row["mean_matched_dice"],
+            )
+            self.assertAlmostEqual(
+                expected["prediction_count"] / expected["truth_count"],
+                row["prediction_truth_ratio"],
+            )
+            for key in ("true_positives", "false_positives", "false_negatives"):
+                self.assertEqual(expected[key], row[key])
+            self.assertAlmostEqual(
+                panoptic_quality(
+                    expected["matched_iou_sum"],
+                    expected["true_positives"],
+                    expected["false_positives"],
+                    expected["false_negatives"],
+                ),
+                row["panoptic_quality"],
+            )
 
     def test_instance_scoring_filters_tiny_masks(self):
         truth = np.ones((1, 3, 3), dtype=bool)

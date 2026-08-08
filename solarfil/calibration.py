@@ -125,6 +125,36 @@ def score_instances(
     }
 
 
+def _score_from_geometry(
+    prediction_areas: np.ndarray,
+    truth_areas: np.ndarray,
+    intersections: np.ndarray,
+) -> dict[str, float | int]:
+    """Score selected instances from compact areas and intersections."""
+    prediction_count = len(prediction_areas)
+    truth_count = len(truth_areas)
+    matched_iou_sum = 0.0
+    true_positives = 0
+    if prediction_count and truth_count:
+        denominators = prediction_areas[:, None] + truth_areas[None]
+        dice_matrix = 2 * intersections / np.maximum(denominators, 1)
+        scores = greedy_scores_from_matrix(dice_matrix, truth_count)
+        unions = denominators - intersections
+        iou_matrix = intersections / np.maximum(unions, 1)
+        matched_iou_sum, true_positives = match_panoptic_iou(iou_matrix)
+    else:
+        scores = [0.0] * truth_count
+    return {
+        "dice_sum": float(sum(scores)),
+        "truth_count": truth_count,
+        "prediction_count": prediction_count,
+        "matched_iou_sum": matched_iou_sum,
+        "true_positives": true_positives,
+        "false_positives": prediction_count - true_positives,
+        "false_negatives": truth_count - true_positives,
+    }
+
+
 def sweep_thresholds(
     cached_outputs: list[tuple[np.ndarray, np.ndarray, np.ndarray]],
     score_thresholds: list[float],
@@ -132,11 +162,9 @@ def sweep_thresholds(
     min_areas: list[int],
 ) -> list[dict[str, float | int]]:
     """Evaluate a threshold grid without repeating neural-network inference."""
-    results = []
-    for score_threshold, mask_threshold, min_area in product(
-        score_thresholds, mask_thresholds, min_areas
-    ):
-        totals = {
+    configurations = list(product(score_thresholds, mask_thresholds, min_areas))
+    totals_by_configuration = {
+        configuration: {
             "dice_sum": 0.0,
             "truth_count": 0,
             "prediction_count": 0,
@@ -145,12 +173,39 @@ def sweep_thresholds(
             "false_positives": 0,
             "false_negatives": 0,
         }
-        for confidence, probabilities, truths in cached_outputs:
-            metrics = score_instances(
-                confidence, probabilities, truths, score_threshold, mask_threshold, min_area
-            )
-            for key in totals:
-                totals[key] += metrics[key]
+        for configuration in configurations
+    }
+    # Threshold each large mask tensor only once per mask threshold. Score and
+    # area thresholds then operate on compact vectors/matrices, avoiding 140
+    # repeated scans of every 2048² probability map in the default grid.
+    for confidence, probabilities, truths in cached_outputs:
+        flat_truths = truths.astype(bool).reshape(len(truths), -1)
+        truth_areas = flat_truths.sum(1)
+        for mask_threshold in mask_thresholds:
+            flat_predictions = (probabilities >= mask_threshold).reshape(len(probabilities), -1)
+            prediction_areas = flat_predictions.sum(1)
+            if len(probabilities) and len(truths):
+                intersections = np.stack([
+                    np.logical_and(flat_predictions, truth).sum(1)
+                    for truth in flat_truths
+                ], axis=1)
+            else:
+                intersections = np.zeros((len(probabilities), len(truths)), dtype=np.int64)
+            for score_threshold in score_thresholds:
+                for min_area in min_areas:
+                    keep = (confidence >= score_threshold) & (prediction_areas >= min_area)
+                    metrics = _score_from_geometry(
+                        prediction_areas[keep], truth_areas, intersections[keep]
+                    )
+                    totals = totals_by_configuration[(
+                        score_threshold, mask_threshold, min_area
+                    )]
+                    for key in totals:
+                        totals[key] += metrics[key]
+
+    results = []
+    for score_threshold, mask_threshold, min_area in configurations:
+        totals = totals_by_configuration[(score_threshold, mask_threshold, min_area)]
         truth_count = int(totals["truth_count"])
         mean_matched_dice = totals["dice_sum"] / truth_count if truth_count else 0.0
         prediction_truth_ratio = totals["prediction_count"] / truth_count if truth_count else 0.0
