@@ -59,7 +59,7 @@ python -m solarfil.infer \
 - Add orientation-aware closing to reconnect thin barbs.
 - Train and threshold-sweep the torchvision Mask R-CNN on a Kaggle GPU.
 - Compare Mask R-CNN with a semantic U-Net plus watershed instance recovery.
-- Match predicted/true instances with Hungarian Dice for local validation.
+- Compare alternative architectures with the official Panoptic Quality metric.
 
 No synthetic score is represented as an official leaderboard score.
 

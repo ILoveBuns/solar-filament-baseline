@@ -26,6 +26,17 @@ def calibration_selection_score(
     return mean_matched_dice - count_penalty_weight * abs(math.log(prediction_truth_ratio))
 
 
+def panoptic_quality(
+    matched_iou_sum: float,
+    true_positives: int,
+    false_positives: int,
+    false_negatives: int,
+) -> float:
+    """Compute the official PQ aggregation from matched IoU and instance counts."""
+    denominator = true_positives + 0.5 * false_positives + 0.5 * false_negatives
+    return matched_iou_sum / denominator if denominator else 0.0
+
+
 def resolve_prediction_thresholds(checkpoint: dict, defaults) -> tuple[float, float, int]:
     """Prefer a validation-selected operating point stored in a checkpoint."""
     calibration = checkpoint.get("calibration") or {}
@@ -55,6 +66,8 @@ def score_instances(
     if len(predictions):
         predictions = predictions[predictions.reshape(len(predictions), -1).sum(1) >= min_area]
 
+    matched_iou_sum = 0.0
+    true_positives = 0
     if len(predictions) and len(truths):
         flat_predictions = predictions.reshape(len(predictions), -1)
         flat_truths = truths.astype(bool).reshape(len(truths), -1)
@@ -62,6 +75,27 @@ def score_instances(
         denominators = flat_predictions.sum(1)[:, None] + flat_truths.sum(1)[None]
         matrix = 2 * intersections / np.maximum(denominators, 1)
         scores = greedy_scores_from_matrix(matrix, len(truths))
+
+        unions = flat_predictions.sum(1)[:, None] + flat_truths.sum(1)[None] - intersections
+        iou_matrix = intersections / np.maximum(unions, 1)
+        candidates = sorted(
+            (
+                (float(iou_matrix[prediction_id, truth_id]), prediction_id, truth_id)
+                for prediction_id in range(len(predictions))
+                for truth_id in range(len(truths))
+                if iou_matrix[prediction_id, truth_id] > 0.5
+            ),
+            reverse=True,
+        )
+        used_predictions: set[int] = set()
+        used_truths: set[int] = set()
+        for iou, prediction_id, truth_id in candidates:
+            if prediction_id in used_predictions or truth_id in used_truths:
+                continue
+            used_predictions.add(prediction_id)
+            used_truths.add(truth_id)
+            matched_iou_sum += iou
+        true_positives = len(used_predictions)
     else:
         scores = [0.0] * len(truths)
 
@@ -69,6 +103,10 @@ def score_instances(
         "dice_sum": float(sum(scores)),
         "truth_count": int(len(truths)),
         "prediction_count": int(len(predictions)),
+        "matched_iou_sum": matched_iou_sum,
+        "true_positives": true_positives,
+        "false_positives": int(len(predictions) - true_positives),
+        "false_negatives": int(len(truths) - true_positives),
     }
 
 
@@ -83,7 +121,15 @@ def sweep_thresholds(
     for score_threshold, mask_threshold, min_area in product(
         score_thresholds, mask_thresholds, min_areas
     ):
-        totals = {"dice_sum": 0.0, "truth_count": 0, "prediction_count": 0}
+        totals = {
+            "dice_sum": 0.0,
+            "truth_count": 0,
+            "prediction_count": 0,
+            "matched_iou_sum": 0.0,
+            "true_positives": 0,
+            "false_positives": 0,
+            "false_negatives": 0,
+        }
         for confidence, probabilities, truths in cached_outputs:
             metrics = score_instances(
                 confidence, probabilities, truths, score_threshold, mask_threshold, min_area
@@ -93,15 +139,23 @@ def sweep_thresholds(
         truth_count = int(totals["truth_count"])
         mean_matched_dice = totals["dice_sum"] / truth_count if truth_count else 0.0
         prediction_truth_ratio = totals["prediction_count"] / truth_count if truth_count else 0.0
+        pq = panoptic_quality(
+            totals["matched_iou_sum"],
+            int(totals["true_positives"]),
+            int(totals["false_positives"]),
+            int(totals["false_negatives"]),
+        )
         results.append({
             "score_threshold": score_threshold,
             "mask_threshold": mask_threshold,
             "min_area": min_area,
             "mean_matched_dice": mean_matched_dice,
             "prediction_truth_ratio": prediction_truth_ratio,
-            "selection_score": calibration_selection_score(
-                mean_matched_dice, prediction_truth_ratio
-            ),
+            "panoptic_quality": pq,
+            "true_positives": int(totals["true_positives"]),
+            "false_positives": int(totals["false_positives"]),
+            "false_negatives": int(totals["false_negatives"]),
+            "selection_score": pq,
         })
     return sorted(
         results,

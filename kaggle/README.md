@@ -18,10 +18,11 @@ and PyTorch/torchvision.
   confidence, mask and minimum-area thresholds is reported. The best operating
   point is stored in the checkpoint and automatically reused for prediction
   instead of assuming the defaults are optimal.
-- Calibration ranks operating points with matched Dice minus a symmetric
-  log-ratio penalty for predicting too many or too few instances. This avoids
-  selecting a fragmented result merely because unmatched predictions are not
-  represented in matched Dice.
+- Calibration ranks operating points with Panoptic Quality, using IoU > 0.5
+  one-to-one matches and the official TP + 0.5 FP + 0.5 FN denominator. This
+  follows the competition's August 7 metric update and directly penalizes
+  fragmented duplicate predictions. Matched Dice and the prediction/truth ratio
+  remain in the report as diagnostics.
 
 The pretrained weights were trained on COCO. Their public provenance and use
 must be disclosed in the final technical report.

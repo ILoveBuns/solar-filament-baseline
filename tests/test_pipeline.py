@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from solarfil.metrics import dice
 from solarfil.calibration import (
     calibration_selection_score,
+    panoptic_quality,
     resolve_prediction_thresholds,
     score_instances,
     sweep_thresholds,
@@ -21,6 +22,22 @@ from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, write_submission
 class PipelineTest(unittest.TestCase):
+    def test_panoptic_quality_penalizes_duplicate_predictions(self):
+        truth = np.ones((1, 3, 3), dtype=bool)
+        probabilities = np.repeat(truth.astype(float), 2, axis=0)
+        result = score_instances(
+            np.array([0.9, 0.8]), probabilities, truth, 0.5, 0.5, 1
+        )
+        self.assertEqual(1, result["true_positives"])
+        self.assertEqual(1, result["false_positives"])
+        self.assertEqual(0, result["false_negatives"])
+        self.assertAlmostEqual(2 / 3, panoptic_quality(
+            result["matched_iou_sum"],
+            result["true_positives"],
+            result["false_positives"],
+            result["false_negatives"],
+        ))
+
     def test_calibration_penalizes_fragmented_instance_count(self):
         balanced = calibration_selection_score(0.60, 1.0)
         fragmented = calibration_selection_score(0.62, 3.0)
@@ -46,6 +63,7 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(0.5, results[0]["score_threshold"])
         self.assertEqual(1.0, results[0]["mean_matched_dice"])
         self.assertEqual(1.0, results[0]["prediction_truth_ratio"])
+        self.assertEqual(1.0, results[0]["panoptic_quality"])
 
     def test_instance_scoring_filters_tiny_masks(self):
         truth = np.ones((1, 3, 3), dtype=bool)
