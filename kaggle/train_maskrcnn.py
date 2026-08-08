@@ -35,7 +35,7 @@ from solarfil.calibration import (
     resolve_prediction_thresholds,
     sweep_thresholds,
 )
-from solarfil.submission import encode_mask
+from solarfil.submission import encode_mask, make_masks_disjoint
 
 
 def annotation_mask(annotation: dict, height: int, width: int) -> np.ndarray:
@@ -327,8 +327,9 @@ def predict(args) -> None:
             masks = output["masks"].cpu()[selected, 0] >= mask_threshold
             areas = masks.flatten(1).sum(1)
             masks = masks[areas >= min_area]
-            for index, mask in enumerate(masks, 1):
-                writer.writerow([f"{path.stem}_{index}", encode_mask(mask.numpy())])
+            disjoint_masks = make_masks_disjoint([mask.numpy() for mask in masks])
+            for index, mask in enumerate(disjoint_masks, 1):
+                writer.writerow([f"{path.stem}_{index}", encode_mask(mask)])
 
 
 def parse_args():
