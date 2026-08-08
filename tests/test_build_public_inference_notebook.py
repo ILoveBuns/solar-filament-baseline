@@ -22,6 +22,8 @@ class PublicInferenceNotebookTest(unittest.TestCase):
         self.assertIn("Apache-2.0", joined)
         self.assertIn("submission.to_csv", joined)
         self.assertIn("frozen hash mismatch", joined)
+        self.assertIn("/kaggle/input/solar-filament-public-yolo-unet-weights", joined)
+        self.assertNotIn("notebook_output_download", joined)
         self.assertIn("mask[occupied] = False", joined)
         self.assertIn("assert overlap_violations == 0", joined)
         self.assertNotIn("model.train(", joined)

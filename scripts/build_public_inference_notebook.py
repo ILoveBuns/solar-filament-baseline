@@ -68,11 +68,12 @@ def build(source_path: Path) -> dict:
     fetch = f'''import hashlib
 import shutil
 from pathlib import Path
-import kagglehub
 
 PUBLIC_HANDLE = {PUBLIC_HANDLE!r}
 EXPECTED = {EXPECTED!r}
-asset_dir = Path(kagglehub.notebook_output_download(PUBLIC_HANDLE))
+asset_dir = Path("/kaggle/input/solar-filament-public-yolo-unet-weights")
+if not asset_dir.is_dir():
+    raise RuntimeError(f"attached frozen-weight dataset is missing: {{asset_dir}}")
 for name, expected in EXPECTED.items():
     matches = list(asset_dir.rglob(name))
     if len(matches) != 1:
@@ -131,7 +132,7 @@ print(json.dumps(report, indent=2))
                 "submission is accepted and scored. It downloads and verifies the frozen public "
                 "weights, then performs inference only."
             ),
-            code("%pip install -q ultralytics kagglehub"),
+            code("%pip install -q ultralytics"),
             code(cells[1]["source"]),
             code(cells[2]["source"]),
             code(fetch),
