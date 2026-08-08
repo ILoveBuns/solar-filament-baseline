@@ -25,13 +25,14 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 from solarfil.coco_data import (
+    greedy_scores_from_matrix,
     select_best_image_records,
     stable_stratified_split,
 )
 from solarfil.calibration import (
+    match_panoptic_iou,
     panoptic_quality,
     resolve_prediction_thresholds,
-    score_instances,
     sweep_thresholds,
 )
 from solarfil.submission import encode_mask
@@ -139,16 +140,39 @@ def validate(
             break
         outputs = model([image.to(device) for image in images])
         for output, target in zip(outputs, targets):
-            metrics = score_instances(
-                output["scores"].cpu().numpy(),
-                output["masks"][:, 0].cpu().numpy(),
-                target["masks"].cpu().numpy().astype(bool),
-                score_threshold,
-                mask_threshold,
-                min_area,
-            )
-            for key in totals:
-                totals[key] += metrics[key]
+            selected = output["scores"] >= score_threshold
+            predictions = output["masks"][selected, 0] >= mask_threshold
+            if len(predictions):
+                areas = predictions.flatten(1).sum(1)
+                predictions = predictions[areas >= min_area]
+            truths = target["masks"].to(device).bool()
+            prediction_count = len(predictions)
+            truth_count = len(truths)
+            totals["prediction_count"] += prediction_count
+            totals["truth_count"] += truth_count
+            if prediction_count and truth_count:
+                prediction_areas = predictions.flatten(1).sum(1)
+                truth_areas = truths.flatten(1).sum(1)
+                intersections = torch.stack([
+                    (predictions & truth).flatten(1).sum(1) for truth in truths
+                ], dim=1)
+                dice_denominators = prediction_areas[:, None] + truth_areas[None, :]
+                dice_matrix = 2 * intersections / dice_denominators.clamp_min(1)
+                totals["dice_sum"] += sum(greedy_scores_from_matrix(
+                    dice_matrix.cpu().numpy(), truth_count
+                ))
+                unions = dice_denominators - intersections
+                iou_matrix = intersections / unions.clamp_min(1)
+                matched_iou_sum, true_positives = match_panoptic_iou(
+                    iou_matrix.cpu().numpy()
+                )
+            else:
+                true_positives = 0
+                matched_iou_sum = 0.0
+            totals["matched_iou_sum"] += matched_iou_sum
+            totals["true_positives"] += true_positives
+            totals["false_positives"] += prediction_count - true_positives
+            totals["false_negatives"] += truth_count - true_positives
     truth_count = int(totals["truth_count"])
     prediction_count = int(totals["prediction_count"])
     return {

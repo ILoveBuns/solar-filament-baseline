@@ -37,6 +37,32 @@ def panoptic_quality(
     return matched_iou_sum / denominator if denominator else 0.0
 
 
+def match_panoptic_iou(
+    iou_matrix: np.ndarray,
+    match_threshold: float = 0.5,
+) -> tuple[float, int]:
+    """Greedily match a small prediction/truth IoU matrix for PQ aggregation."""
+    candidates = sorted(
+        (
+            (float(iou_matrix[prediction_id, truth_id]), prediction_id, truth_id)
+            for prediction_id in range(iou_matrix.shape[0])
+            for truth_id in range(iou_matrix.shape[1])
+            if iou_matrix[prediction_id, truth_id] > match_threshold
+        ),
+        reverse=True,
+    )
+    used_predictions: set[int] = set()
+    used_truths: set[int] = set()
+    matched_iou_sum = 0.0
+    for iou, prediction_id, truth_id in candidates:
+        if prediction_id in used_predictions or truth_id in used_truths:
+            continue
+        used_predictions.add(prediction_id)
+        used_truths.add(truth_id)
+        matched_iou_sum += iou
+    return matched_iou_sum, len(used_predictions)
+
+
 def resolve_prediction_thresholds(checkpoint: dict, defaults) -> tuple[float, float, int]:
     """Prefer a validation-selected operating point stored in a checkpoint."""
     calibration = checkpoint.get("calibration") or {}
@@ -84,24 +110,7 @@ def score_instances(
 
         unions = flat_predictions.sum(1)[:, None] + flat_truths.sum(1)[None] - intersections
         iou_matrix = intersections / np.maximum(unions, 1)
-        candidates = sorted(
-            (
-                (float(iou_matrix[prediction_id, truth_id]), prediction_id, truth_id)
-                for prediction_id in range(len(predictions))
-                for truth_id in range(len(truths))
-                if iou_matrix[prediction_id, truth_id] > 0.5
-            ),
-            reverse=True,
-        )
-        used_predictions: set[int] = set()
-        used_truths: set[int] = set()
-        for iou, prediction_id, truth_id in candidates:
-            if prediction_id in used_predictions or truth_id in used_truths:
-                continue
-            used_predictions.add(prediction_id)
-            used_truths.add(truth_id)
-            matched_iou_sum += iou
-        true_positives = len(used_predictions)
+        matched_iou_sum, true_positives = match_panoptic_iou(iou_matrix)
     else:
         scores = [0.0] * len(truths)
 
