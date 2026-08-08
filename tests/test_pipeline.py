@@ -21,8 +21,24 @@ from solarfil.coco_data import (
 )
 from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label_dice
 from solarfil.segment import segment_instances
-from solarfil.submission import decode_mask, write_submission
+from solarfil.submission import decode_mask, make_masks_disjoint, write_submission
+
+
 class PipelineTest(unittest.TestCase):
+    def test_make_masks_disjoint_preserves_priority_and_drops_empty_masks(self):
+        first = np.zeros((4, 4), dtype=bool)
+        first[1:3, 1:3] = True
+        second = np.zeros((4, 4), dtype=bool)
+        second[2:4, 2:4] = True
+        duplicate = first.copy()
+
+        result = make_masks_disjoint([first, second, duplicate])
+
+        self.assertEqual(2, len(result))
+        self.assertTrue(np.array_equal(result[0], first))
+        self.assertEqual(3, int(result[1].sum()))
+        self.assertFalse(np.logical_and(result[0], result[1]).any())
+
     def test_panoptic_quality_penalizes_duplicate_predictions(self):
         truth = np.ones((1, 3, 3), dtype=bool)
         probabilities = np.repeat(truth.astype(float), 2, axis=0)
