@@ -29,7 +29,7 @@ from solarfil.coco_data import (
     select_best_image_records,
     stable_stratified_split,
 )
-from solarfil.calibration import sweep_thresholds
+from solarfil.calibration import resolve_prediction_thresholds, sweep_thresholds
 from solarfil.submission import encode_mask
 
 
@@ -211,6 +211,8 @@ def train(args) -> None:
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model.load_state_dict(checkpoint["model"])
     calibration = calibrate(model, validation_loader, device, args)
+    checkpoint["calibration"] = calibration[0]
+    torch.save(checkpoint, args.checkpoint)
     print(json.dumps({"calibration_top": calibration[:10]}))
 
 
@@ -221,6 +223,14 @@ def predict(args) -> None:
     checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
     model.load_state_dict(checkpoint["model"])
     model.to(device).eval()
+    score_threshold, mask_threshold, min_area = resolve_prediction_thresholds(checkpoint, args)
+    print(json.dumps({
+        "prediction_thresholds": {
+            "score_threshold": score_threshold,
+            "mask_threshold": mask_threshold,
+            "min_area": min_area,
+        }
+    }))
     files = sorted((args.root / "test/test_images").glob("*.jpeg"))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open("w", newline="") as handle:
@@ -229,10 +239,10 @@ def predict(args) -> None:
         for path in files:
             image = torch.from_numpy(np.asarray(Image.open(path).convert("RGB")).copy()).permute(2, 0, 1)
             output = model([image.float().to(device) / 255.0])[0]
-            selected = output["scores"].cpu() >= args.score_threshold
-            masks = output["masks"].cpu()[selected, 0] >= args.mask_threshold
+            selected = output["scores"].cpu() >= score_threshold
+            masks = output["masks"].cpu()[selected, 0] >= mask_threshold
             areas = masks.flatten(1).sum(1)
-            masks = masks[areas >= args.min_area]
+            masks = masks[areas >= min_area]
             for index, mask in enumerate(masks, 1):
                 writer.writerow([f"{path.stem}_{index}", encode_mask(mask.numpy())])
 

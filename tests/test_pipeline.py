@@ -3,9 +3,10 @@ import unittest
 from pathlib import Path
 
 import numpy as np
+from types import SimpleNamespace
 
 from solarfil.metrics import dice
-from solarfil.calibration import score_instances, sweep_thresholds
+from solarfil.calibration import resolve_prediction_thresholds, score_instances, sweep_thresholds
 from solarfil.coco_data import (
     greedy_scores_from_matrix,
     select_best_image_records,
@@ -14,9 +15,16 @@ from solarfil.coco_data import (
 from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label_dice
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, write_submission
-
-
 class PipelineTest(unittest.TestCase):
+    def test_checkpoint_calibration_overrides_prediction_defaults(self):
+        args = SimpleNamespace(score_threshold=0.35, mask_threshold=0.5, min_area=24)
+        checkpoint = {"calibration": {
+            "score_threshold": 0.25,
+            "mask_threshold": 0.6,
+            "min_area": 48,
+        }}
+        self.assertEqual((0.25, 0.6, 48), resolve_prediction_thresholds(checkpoint, args))
+
     def test_threshold_sweep_reuses_probabilities_and_selects_best_point(self):
         truth = np.zeros((1, 6, 6), dtype=bool)
         truth[0, 1:5, 1:5] = True

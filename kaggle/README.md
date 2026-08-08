@@ -15,8 +15,9 @@ and PyTorch/torchvision.
 - Predictions are capped at 32 per image and validation reports the
   prediction/truth ratio alongside matched Dice.
 - After training, validation predictions are cached once and a joint grid over
-  confidence, mask and minimum-area thresholds is reported. Use the selected
-  operating point for prediction instead of assuming the defaults are optimal.
+  confidence, mask and minimum-area thresholds is reported. The best operating
+  point is stored in the checkpoint and automatically reused for prediction
+  instead of assuming the defaults are optimal.
 
 The pretrained weights were trained on COCO. Their public provenance and use
 must be disclosed in the final technical report.

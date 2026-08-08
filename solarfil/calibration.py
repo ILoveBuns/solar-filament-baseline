@@ -9,6 +9,16 @@ import numpy as np
 from .coco_data import greedy_scores_from_matrix
 
 
+def resolve_prediction_thresholds(checkpoint: dict, defaults) -> tuple[float, float, int]:
+    """Prefer a validation-selected operating point stored in a checkpoint."""
+    calibration = checkpoint.get("calibration") or {}
+    return (
+        float(calibration.get("score_threshold", defaults.score_threshold)),
+        float(calibration.get("mask_threshold", defaults.mask_threshold)),
+        int(calibration.get("min_area", defaults.min_area)),
+    )
+
+
 def score_instances(
     confidence: np.ndarray,
     probabilities: np.ndarray,
