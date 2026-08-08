@@ -25,11 +25,15 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 from solarfil.coco_data import (
-    greedy_scores_from_matrix,
     select_best_image_records,
     stable_stratified_split,
 )
-from solarfil.calibration import resolve_prediction_thresholds, sweep_thresholds
+from solarfil.calibration import (
+    panoptic_quality,
+    resolve_prediction_thresholds,
+    score_instances,
+    sweep_thresholds,
+)
 from solarfil.submission import encode_mask
 
 
@@ -111,33 +115,53 @@ def build_model(trainable_backbone_layers: int = 3, pretrained: bool = True):
 
 
 @torch.inference_mode()
-def validate(model, loader, device, score_threshold: float, mask_threshold: float, limit: int):
+def validate(
+    model,
+    loader,
+    device,
+    score_threshold: float,
+    mask_threshold: float,
+    min_area: int,
+    limit: int,
+):
     model.eval()
-    scores = []
-    truth_count = prediction_count = 0
+    totals = {
+        "dice_sum": 0.0,
+        "truth_count": 0,
+        "prediction_count": 0,
+        "matched_iou_sum": 0.0,
+        "true_positives": 0,
+        "false_positives": 0,
+        "false_negatives": 0,
+    }
     for batch_index, (images, targets) in enumerate(loader):
         if batch_index >= limit:
             break
         outputs = model([image.to(device) for image in images])
         for output, target in zip(outputs, targets):
-            selected = output["scores"] >= score_threshold
-            predictions = output["masks"][selected, 0] >= mask_threshold
-            truths = target["masks"].to(device).bool()
-            if len(predictions) and len(truths):
-                prediction_areas = predictions.flatten(1).sum(1)
-                truth_areas = truths.flatten(1).sum(1)
-                intersections = torch.stack([
-                    (predictions & truth).flatten(1).sum(1) for truth in truths
-                ], dim=1)
-                denominators = prediction_areas[:, None] + truth_areas[None, :]
-                matrix = (2 * intersections / denominators.clamp_min(1)).cpu().numpy()
-                scores.extend(greedy_scores_from_matrix(matrix, len(truths)))
-            else:
-                scores.extend([0.0] * len(truths))
-            prediction_count += len(predictions)
-            truth_count += len(truths)
+            metrics = score_instances(
+                output["scores"].cpu().numpy(),
+                output["masks"][:, 0].cpu().numpy(),
+                target["masks"].cpu().numpy().astype(bool),
+                score_threshold,
+                mask_threshold,
+                min_area,
+            )
+            for key in totals:
+                totals[key] += metrics[key]
+    truth_count = int(totals["truth_count"])
+    prediction_count = int(totals["prediction_count"])
     return {
-        "mean_matched_dice": float(np.mean(scores)) if scores else 0.0,
+        "mean_matched_dice": totals["dice_sum"] / truth_count if truth_count else 0.0,
+        "panoptic_quality": panoptic_quality(
+            totals["matched_iou_sum"],
+            int(totals["true_positives"]),
+            int(totals["false_positives"]),
+            int(totals["false_negatives"]),
+        ),
+        "true_positives": int(totals["true_positives"]),
+        "false_positives": int(totals["false_positives"]),
+        "false_negatives": int(totals["false_negatives"]),
         "instances_predicted": prediction_count,
         "instances_truth": truth_count,
         "prediction_truth_ratio": prediction_count / truth_count if truth_count else 0.0,
@@ -230,11 +254,18 @@ def train(args) -> None:
             scaler.step(optimizer)
             scaler.update()
             losses.append(float(loss.detach().cpu()))
-        metrics = validate(model, validation_data_loader, device, args.score_threshold,
-                           args.mask_threshold, args.validation_limit)
+        metrics = validate(
+            model,
+            validation_data_loader,
+            device,
+            args.score_threshold,
+            args.mask_threshold,
+            args.min_area,
+            args.validation_limit,
+        )
         print(json.dumps({"epoch": epoch, "train_loss": float(np.mean(losses)), **metrics}))
-        if metrics["mean_matched_dice"] > best_score:
-            best_score = metrics["mean_matched_dice"]
+        if metrics["panoptic_quality"] > best_score:
+            best_score = metrics["panoptic_quality"]
             torch.save({"model": model.state_dict(), "epoch": epoch, "metrics": metrics}, args.checkpoint)
         scheduler.step()
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
