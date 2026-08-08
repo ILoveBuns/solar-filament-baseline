@@ -167,17 +167,46 @@ def calibrate(model, loader, device, args):
     )
 
 
+def validation_loader(args):
+    """Build the deterministic validation loader used by training and recalibration."""
+    annotation_path = args.root / "train/MAGFiLO_1.0_Annotations_kaggle2026_train.json"
+    coco = json.loads(annotation_path.read_text())
+    records = select_best_image_records(coco)
+    _, validation_files = stable_stratified_split(list(records), args.val_fraction, args.seed)
+    validation_data = FilamentDataset(args.root, validation_files, coco)
+    return DataLoader(
+        validation_data,
+        batch_size=1,
+        shuffle=False,
+        num_workers=args.workers,
+        collate_fn=collate,
+    )
+
+
+def calibrate_checkpoint(args) -> None:
+    """Recalibrate a trained checkpoint without repeating GPU training."""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    checkpoint = torch.load(args.checkpoint, map_location="cpu", weights_only=True)
+    model = build_model(args.trainable_backbone_layers, pretrained=False)
+    model.load_state_dict(checkpoint["model"])
+    model.to(device).eval()
+    results = calibrate(model, validation_loader(args), device, args)
+    if not results:
+        raise RuntimeError("calibration produced no candidate thresholds")
+    checkpoint["calibration"] = results[0]
+    torch.save(checkpoint, args.checkpoint)
+    print(json.dumps({"calibration_top": results[:10]}))
+
+
 def train(args) -> None:
     annotation_path = args.root / "train/MAGFiLO_1.0_Annotations_kaggle2026_train.json"
     coco = json.loads(annotation_path.read_text())
     records = select_best_image_records(coco)
-    train_files, validation_files = stable_stratified_split(list(records), args.val_fraction, args.seed)
+    train_files, _ = stable_stratified_split(list(records), args.val_fraction, args.seed)
     train_data = FilamentDataset(args.root, train_files, coco, augment=True)
-    validation_data = FilamentDataset(args.root, validation_files, coco)
     train_loader = DataLoader(train_data, batch_size=args.batch_size, shuffle=True,
                               num_workers=args.workers, collate_fn=collate, pin_memory=True)
-    validation_loader = DataLoader(validation_data, batch_size=1, shuffle=False,
-                                   num_workers=args.workers, collate_fn=collate)
+    validation_data_loader = validation_loader(args)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model(args.trainable_backbone_layers, pretrained=True).to(device)
     optimizer = torch.optim.AdamW(
@@ -201,7 +230,7 @@ def train(args) -> None:
             scaler.step(optimizer)
             scaler.update()
             losses.append(float(loss.detach().cpu()))
-        metrics = validate(model, validation_loader, device, args.score_threshold,
+        metrics = validate(model, validation_data_loader, device, args.score_threshold,
                            args.mask_threshold, args.validation_limit)
         print(json.dumps({"epoch": epoch, "train_loss": float(np.mean(losses)), **metrics}))
         if metrics["mean_matched_dice"] > best_score:
@@ -210,7 +239,7 @@ def train(args) -> None:
         scheduler.step()
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
     model.load_state_dict(checkpoint["model"])
-    calibration = calibrate(model, validation_loader, device, args)
+    calibration = calibrate(model, validation_data_loader, device, args)
     checkpoint["calibration"] = calibration[0]
     torch.save(checkpoint, args.checkpoint)
     print(json.dumps({"calibration_top": calibration[:10]}))
@@ -249,7 +278,7 @@ def predict(args) -> None:
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=("train", "predict"))
+    parser.add_argument("mode", choices=("train", "calibrate", "predict"))
     parser.add_argument("root", type=Path)
     parser.add_argument("--checkpoint", type=Path, default=Path("maskrcnn-best.pt"))
     parser.add_argument("--output", type=Path, default=Path("submission-maskrcnn.csv"))
@@ -278,4 +307,9 @@ if __name__ == "__main__":
     random.seed(arguments.seed)
     np.random.seed(arguments.seed)
     torch.manual_seed(arguments.seed)
-    train(arguments) if arguments.mode == "train" else predict(arguments)
+    if arguments.mode == "train":
+        train(arguments)
+    elif arguments.mode == "calibrate":
+        calibrate_checkpoint(arguments)
+    else:
+        predict(arguments)
