@@ -89,6 +89,16 @@ print("verified frozen public weights", sorted(EXPECTED))
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 '''
 
+    accelerator_check = '''if not torch.cuda.is_available():
+    raise RuntimeError("GPU is required for this inference candidate")
+device_name = torch.cuda.get_device_name(0)
+compute_capability = torch.cuda.get_device_capability(0)
+probe = (torch.ones(1, device="cuda") + 1).item()
+torch.cuda.synchronize()
+assert probe == 2
+print({"device": device_name, "compute_capability": compute_capability, "torch": torch.__version__, "cuda": torch.version.cuda})
+'''
+
     validate = '''assert list(submission.columns) == ["filament_id", "segmentation_rle"]
 assert not submission.empty
 assert submission["filament_id"].is_unique
@@ -134,6 +144,7 @@ print(json.dumps(report, indent=2))
             ),
             code("%pip install -q ultralytics"),
             code(cells[1]["source"]),
+            code(accelerator_check),
             code(cells[2]["source"]),
             code(fetch),
             code(refiner_defs),

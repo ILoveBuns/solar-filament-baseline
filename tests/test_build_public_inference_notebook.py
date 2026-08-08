@@ -24,6 +24,7 @@ class PublicInferenceNotebookTest(unittest.TestCase):
         self.assertIn("frozen hash mismatch", joined)
         self.assertIn("/kaggle/input/solar-filament-public-yolo-unet-weights", joined)
         self.assertNotIn("notebook_output_download", joined)
+        self.assertIn("torch.cuda.get_device_capability", joined)
         self.assertIn("mask[occupied] = False", joined)
         self.assertIn("assert overlap_violations == 0", joined)
         self.assertNotIn("model.train(", joined)
