@@ -22,6 +22,8 @@ class PublicInferenceNotebookTest(unittest.TestCase):
         self.assertIn("Apache-2.0", joined)
         self.assertIn("submission.to_csv", joined)
         self.assertIn("frozen hash mismatch", joined)
+        self.assertIn("mask[occupied] = False", joined)
+        self.assertIn("assert overlap_violations == 0", joined)
         self.assertNotIn("model.train(", joined)
         self.assertNotIn("train_refiner(", joined)
 

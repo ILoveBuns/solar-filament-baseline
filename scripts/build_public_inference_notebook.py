@@ -36,6 +36,34 @@ def build(source_path: Path) -> dict:
     source = json.loads(source_path.read_text())
     cells = source["cells"]
     refiner_defs = cells[7]["source"].split("def build_crop_arrays", 1)[0]
+    inference = cells[13]["source"]
+    original_loop = '''    image_id = filename.replace(".jpeg", "")
+    counter = 1
+
+    for mask in refined:
+
+        if mask.sum() < CFG.MIN_COMPONENT_SIZE:
+            continue
+
+        rle = mask_utils.encode(np.asfortranarray(mask.astype(np.uint8)))
+'''
+    disjoint_loop = '''    image_id = filename.replace(".jpeg", "")
+    counter = 1
+    occupied = np.zeros_like(image_gray, dtype=bool)
+
+    for mask in refined:
+        mask = np.asarray(mask, dtype=bool).copy()
+        mask[occupied] = False
+
+        if mask.sum() < CFG.MIN_COMPONENT_SIZE:
+            continue
+
+        occupied |= mask
+        rle = mask_utils.encode(np.asfortranarray(mask.astype(np.uint8)))
+'''
+    if inference.count(original_loop) != 1:
+        raise RuntimeError("public inference loop no longer matches the audited source")
+    inference = inference.replace(original_loop, disjoint_loop)
 
     fetch = f'''import hashlib
 import shutil
@@ -67,6 +95,19 @@ assert submission["segmentation_rle"].map(lambda value: isinstance(value, str) a
 known_images = {Path(name).stem for name in test_files}
 submitted_images = {value.rsplit("_", 1)[0] for value in submission["filament_id"]}
 assert submitted_images <= known_images
+overlap_violations = 0
+for _, group in submission.groupby(submission["filament_id"].str.rsplit("_", n=1).str[0], sort=False):
+    occupied_rle = None
+    for counts in group["segmentation_rle"]:
+        current_rle = {"size": [2048, 2048], "counts": counts.encode("ascii")}
+        assert int(mask_utils.area(current_rle)) > 0
+        if occupied_rle is not None:
+            intersection = mask_utils.merge([occupied_rle, current_rle], intersect=True)
+            overlap_violations += int(mask_utils.area(intersection) > 0)
+            occupied_rle = mask_utils.merge([occupied_rle, current_rle], intersect=False)
+        else:
+            occupied_rle = current_rle
+assert overlap_violations == 0
 report = {
     "source": PUBLIC_HANDLE,
     "source_license": "Apache-2.0",
@@ -74,6 +115,7 @@ report = {
     "test_images": len(known_images),
     "images_with_predictions": len(submitted_images),
     "prediction_rows": len(submission),
+    "overlap_violations": overlap_violations,
     "missing_prediction_images": sorted(known_images - submitted_images),
 }
 Path("public-yolo-unet-inference-report.json").write_text(json.dumps(report, indent=2))
@@ -96,7 +138,7 @@ print(json.dumps(report, indent=2))
             code(refiner_defs),
             code(load_models),
             code(cells[10]["source"]),
-            code(cells[13]["source"]),
+            code(inference),
             code(validate),
         ],
         "metadata": source.get("metadata", {}),
