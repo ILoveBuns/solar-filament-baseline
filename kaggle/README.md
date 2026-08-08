@@ -45,6 +45,17 @@ python kaggle/train_maskrcnn.py predict "$ROOT" \
   --output /kaggle/working/submission-maskrcnn.csv
 ```
 
+To reuse an existing trained checkpoint after calibration logic changes, run
+only the deterministic validation sweep and prediction steps:
+
+```bash
+python kaggle/train_maskrcnn.py calibrate "$ROOT" \
+  --checkpoint /kaggle/working/maskrcnn-best.pt
+python kaggle/train_maskrcnn.py predict "$ROOT" \
+  --checkpoint /kaggle/working/maskrcnn-best.pt \
+  --output /kaggle/working/submission-maskrcnn.csv
+```
+
 Do not submit the CSV until the epoch metrics, row count, image coverage and
 RLE round-trip checks have been reviewed. Record the Kaggle image, torch,
 torchvision, CUDA and GPU versions in the run notes for reproducibility.
