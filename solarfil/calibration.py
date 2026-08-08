@@ -71,7 +71,13 @@ def score_instances(
     if len(predictions) and len(truths):
         flat_predictions = predictions.reshape(len(predictions), -1)
         flat_truths = truths.astype(bool).reshape(len(truths), -1)
-        intersections = np.logical_and(flat_predictions[:, None], flat_truths[None]).sum(2)
+        # Avoid materializing a predictions × truths × pixels broadcast, which
+        # can exceed a gigabyte for one 2048² image. Each temporary is bounded
+        # to predictions × pixels instead.
+        intersections = np.stack([
+            np.logical_and(flat_predictions, truth).sum(1)
+            for truth in flat_truths
+        ], axis=1)
         denominators = flat_predictions.sum(1)[:, None] + flat_truths.sum(1)[None]
         matrix = 2 * intersections / np.maximum(denominators, 1)
         scores = greedy_scores_from_matrix(matrix, len(truths))
