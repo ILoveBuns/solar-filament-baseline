@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from solarfil.metrics import dice
+from solarfil.calibration import score_instances, sweep_thresholds
 from solarfil.coco_data import (
     greedy_scores_from_matrix,
     select_best_image_records,
@@ -16,6 +17,25 @@ from solarfil.submission import decode_mask, write_submission
 
 
 class PipelineTest(unittest.TestCase):
+    def test_threshold_sweep_reuses_probabilities_and_selects_best_point(self):
+        truth = np.zeros((1, 6, 6), dtype=bool)
+        truth[0, 1:5, 1:5] = True
+        probabilities = np.zeros((2, 6, 6), dtype=float)
+        probabilities[0, 1:5, 1:5] = 0.9
+        probabilities[1, 0, 0] = 0.8
+        cached = [(np.array([0.8, 0.2]), probabilities, truth)]
+        results = sweep_thresholds(cached, [0.1, 0.5], [0.5], [1])
+        self.assertEqual(0.5, results[0]["score_threshold"])
+        self.assertEqual(1.0, results[0]["mean_matched_dice"])
+        self.assertEqual(1.0, results[0]["prediction_truth_ratio"])
+
+    def test_instance_scoring_filters_tiny_masks(self):
+        truth = np.ones((1, 3, 3), dtype=bool)
+        probabilities = np.stack([truth[0], np.eye(3, dtype=bool)]).astype(float)
+        result = score_instances(np.array([0.9, 0.9]), probabilities, truth, 0.5, 0.5, 4)
+        self.assertEqual(1, result["prediction_count"])
+        self.assertEqual(1.0, result["dice_sum"])
+
     def test_selects_most_complete_duplicate_annotation_record(self):
         coco = {
             "images": [

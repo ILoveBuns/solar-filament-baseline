@@ -29,6 +29,7 @@ from solarfil.coco_data import (
     select_best_image_records,
     stable_stratified_split,
 )
+from solarfil.calibration import sweep_thresholds
 from solarfil.submission import encode_mask
 
 
@@ -143,6 +144,29 @@ def validate(model, loader, device, score_threshold: float, mask_threshold: floa
     }
 
 
+@torch.inference_mode()
+def calibrate(model, loader, device, args):
+    """Cache validation inference once, then tune all post-processing thresholds."""
+    model.eval()
+    cached = []
+    for batch_index, (images, targets) in enumerate(loader):
+        if batch_index >= args.validation_limit:
+            break
+        outputs = model([image.to(device) for image in images])
+        for output, target in zip(outputs, targets):
+            cached.append((
+                output["scores"].cpu().numpy(),
+                output["masks"][:, 0].cpu().numpy(),
+                target["masks"].cpu().numpy().astype(bool),
+            ))
+    return sweep_thresholds(
+        cached,
+        args.calibration_score_thresholds,
+        args.calibration_mask_thresholds,
+        args.calibration_min_areas,
+    )
+
+
 def train(args) -> None:
     annotation_path = args.root / "train/MAGFiLO_1.0_Annotations_kaggle2026_train.json"
     coco = json.loads(annotation_path.read_text())
@@ -184,6 +208,10 @@ def train(args) -> None:
             best_score = metrics["mean_matched_dice"]
             torch.save({"model": model.state_dict(), "epoch": epoch, "metrics": metrics}, args.checkpoint)
         scheduler.step()
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=True)
+    model.load_state_dict(checkpoint["model"])
+    calibration = calibrate(model, validation_loader, device, args)
+    print(json.dumps({"calibration_top": calibration[:10]}))
 
 
 @torch.inference_mode()
@@ -225,6 +253,12 @@ def parse_args():
     parser.add_argument("--score-threshold", type=float, default=0.35)
     parser.add_argument("--mask-threshold", type=float, default=0.5)
     parser.add_argument("--min-area", type=int, default=24)
+    parser.add_argument("--calibration-score-thresholds", type=float, nargs="+",
+                        default=[0.15, 0.25, 0.35, 0.5])
+    parser.add_argument("--calibration-mask-thresholds", type=float, nargs="+",
+                        default=[0.4, 0.5, 0.6, 0.7])
+    parser.add_argument("--calibration-min-areas", type=int, nargs="+",
+                        default=[12, 24, 48])
     parser.add_argument("--trainable-backbone-layers", type=int, default=3)
     return parser.parse_args()
 
