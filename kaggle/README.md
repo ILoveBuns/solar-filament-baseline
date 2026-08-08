@@ -18,6 +18,9 @@ and PyTorch/torchvision.
   confidence, mask and minimum-area thresholds is reported. The best operating
   point is stored in the checkpoint and automatically reused for prediction
   instead of assuming the defaults are optimal.
+- Epoch-level validation streams up to 64 images, while the post-training grid
+  caches a deterministic 16-image subset as float16. This bounds the worst-case
+  2048-pixel mask cache to avoid exhausting Kaggle host memory.
 - Calibration ranks operating points with Panoptic Quality, using IoU > 0.5
   one-to-one matches and the official TP + 0.5 FP + 0.5 FN denominator. This
   follows the competition's August 7 metric update and directly penalizes

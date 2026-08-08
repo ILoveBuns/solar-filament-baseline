@@ -174,13 +174,13 @@ def calibrate(model, loader, device, args):
     model.eval()
     cached = []
     for batch_index, (images, targets) in enumerate(loader):
-        if batch_index >= args.validation_limit:
+        if batch_index >= args.calibration_limit:
             break
         outputs = model([image.to(device) for image in images])
         for output, target in zip(outputs, targets):
             cached.append((
                 output["scores"].cpu().numpy(),
-                output["masks"][:, 0].cpu().numpy(),
+                output["masks"][:, 0].cpu().numpy().astype(np.float16),
                 target["masks"].cpu().numpy().astype(bool),
             ))
     return sweep_thresholds(
@@ -320,6 +320,7 @@ def parse_args():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--val-fraction", type=float, default=0.2)
     parser.add_argument("--validation-limit", type=int, default=64)
+    parser.add_argument("--calibration-limit", type=int, default=16)
     parser.add_argument("--score-threshold", type=float, default=0.35)
     parser.add_argument("--mask-threshold", type=float, default=0.5)
     parser.add_argument("--min-area", type=int, default=24)
