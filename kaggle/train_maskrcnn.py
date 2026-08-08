@@ -264,11 +264,11 @@ def parse_args():
     parser.add_argument("--mask-threshold", type=float, default=0.5)
     parser.add_argument("--min-area", type=int, default=24)
     parser.add_argument("--calibration-score-thresholds", type=float, nargs="+",
-                        default=[0.15, 0.25, 0.35, 0.5])
+                        default=[0.15, 0.25, 0.35, 0.5, 0.65, 0.75, 0.85])
     parser.add_argument("--calibration-mask-thresholds", type=float, nargs="+",
                         default=[0.4, 0.5, 0.6, 0.7])
     parser.add_argument("--calibration-min-areas", type=int, nargs="+",
-                        default=[12, 24, 48])
+                        default=[12, 24, 48, 96, 192])
     parser.add_argument("--trainable-backbone-layers", type=int, default=3)
     return parser.parse_args()
 

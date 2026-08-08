@@ -6,7 +6,12 @@ import numpy as np
 from types import SimpleNamespace
 
 from solarfil.metrics import dice
-from solarfil.calibration import resolve_prediction_thresholds, score_instances, sweep_thresholds
+from solarfil.calibration import (
+    calibration_selection_score,
+    resolve_prediction_thresholds,
+    score_instances,
+    sweep_thresholds,
+)
 from solarfil.coco_data import (
     greedy_scores_from_matrix,
     select_best_image_records,
@@ -16,6 +21,11 @@ from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, write_submission
 class PipelineTest(unittest.TestCase):
+    def test_calibration_penalizes_fragmented_instance_count(self):
+        balanced = calibration_selection_score(0.60, 1.0)
+        fragmented = calibration_selection_score(0.62, 3.0)
+        self.assertGreater(balanced, fragmented)
+
     def test_checkpoint_calibration_overrides_prediction_defaults(self):
         args = SimpleNamespace(score_threshold=0.35, mask_threshold=0.5, min_area=24)
         checkpoint = {"calibration": {

@@ -18,6 +18,10 @@ and PyTorch/torchvision.
   confidence, mask and minimum-area thresholds is reported. The best operating
   point is stored in the checkpoint and automatically reused for prediction
   instead of assuming the defaults are optimal.
+- Calibration ranks operating points with matched Dice minus a symmetric
+  log-ratio penalty for predicting too many or too few instances. This avoids
+  selecting a fragmented result merely because unmatched predictions are not
+  represented in matched Dice.
 
 The pretrained weights were trained on COCO. Their public provenance and use
 must be disclosed in the final technical report.

@@ -3,10 +3,27 @@
 from __future__ import annotations
 
 from itertools import product
+import math
 
 import numpy as np
 
 from .coco_data import greedy_scores_from_matrix
+
+
+def calibration_selection_score(
+    mean_matched_dice: float,
+    prediction_truth_ratio: float,
+    count_penalty_weight: float = 0.05,
+) -> float:
+    """Balance matched Dice against multiplicative instance-count error.
+
+    Matched Dice alone does not penalize unmatched predictions, so a fragmented
+    operating point can look artificially strong. The log-ratio penalty treats
+    two-times too many and two-times too few instances symmetrically.
+    """
+    if prediction_truth_ratio <= 0:
+        return float("-inf")
+    return mean_matched_dice - count_penalty_weight * abs(math.log(prediction_truth_ratio))
 
 
 def resolve_prediction_thresholds(checkpoint: dict, defaults) -> tuple[float, float, int]:
@@ -74,17 +91,23 @@ def sweep_thresholds(
             for key in totals:
                 totals[key] += metrics[key]
         truth_count = int(totals["truth_count"])
+        mean_matched_dice = totals["dice_sum"] / truth_count if truth_count else 0.0
+        prediction_truth_ratio = totals["prediction_count"] / truth_count if truth_count else 0.0
         results.append({
             "score_threshold": score_threshold,
             "mask_threshold": mask_threshold,
             "min_area": min_area,
-            "mean_matched_dice": totals["dice_sum"] / truth_count if truth_count else 0.0,
-            "prediction_truth_ratio": totals["prediction_count"] / truth_count if truth_count else 0.0,
+            "mean_matched_dice": mean_matched_dice,
+            "prediction_truth_ratio": prediction_truth_ratio,
+            "selection_score": calibration_selection_score(
+                mean_matched_dice, prediction_truth_ratio
+            ),
         })
-    # Matched Dice does not penalize an otherwise-unmatched extra prediction.
-    # Prefer a count ratio near one when Dice ties to avoid selecting an
-    # obviously fragmented operating point.
     return sorted(
         results,
-        key=lambda row: (-row["mean_matched_dice"], abs(row["prediction_truth_ratio"] - 1.0)),
+        key=lambda row: (
+            -row["selection_score"],
+            -row["mean_matched_dice"],
+            abs(row["prediction_truth_ratio"] - 1.0),
+        ),
     )
