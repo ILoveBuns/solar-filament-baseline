@@ -59,7 +59,15 @@ Generate the Kaggle submission:
 python -m solarfil.infer \
   data/official/MAGFiLO_1.0_Kaggle_2026/test/test_images \
   outputs/submission.csv
+
+python scripts/audit_submission.py \
+  outputs/submission.csv \
+  data/official/MAGFiLO_1.0_Kaggle_2026/test/test_images
 ```
+
+The final route has been executed over all 180 available official test images.
+Its deterministic output and full structural audit receipt are recorded in
+[`FINAL_CLASSICAL_EXECUTION.md`](FINAL_CLASSICAL_EXECUTION.md).
 
 For the final competition handoff, use the self-contained
 [`kaggle/final_classical_pipeline.ipynb`](kaggle/final_classical_pipeline.ipynb).
