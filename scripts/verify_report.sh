@@ -27,7 +27,9 @@ if grep -E 'Overfull|undefined references|Citation .* undefined|Reference .* und
   exit 1
 fi
 
-if pdffonts "${pdf}" | tail -n +3 | awk '$4 != "yes" {exit 1}'; then
+# Font type and encoding names may contain spaces, so locate `emb` relative to
+# the stable trailing columns: emb, sub, uni, object number, generation number.
+if pdffonts "${pdf}" | tail -n +3 | awk '$(NF-4) != "yes" {exit 1}'; then
   :
 else
   echo "report contains a non-embedded font" >&2
