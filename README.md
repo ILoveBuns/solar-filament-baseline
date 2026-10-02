@@ -67,6 +67,15 @@ The report source in the organizer's `acmart/sigconf` format and the
 requirement-by-requirement release gates are in
 [`report/main.tex`](report/main.tex) and
 [`FINAL_SUBMISSION_CHECKLIST.md`](FINAL_SUBMISSION_CHECKLIST.md).
+The compiled artifact is [`report/solar-filament-report.pdf`](report/solar-filament-report.pdf).
+With Tectonic and Poppler installed, reproduce its release checks with:
+
+```bash
+bash scripts/verify_report.sh
+```
+
+The check requires exactly four pages, embedded fonts, and no overfull boxes or
+undefined references; CI runs the same gate from a pinned Tectonic archive.
 
 ## Next experiments
 

@@ -1,0 +1,28 @@
+name: Report
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install report tools
+        env:
+          TECTONIC_URL: https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz
+          TECTONIC_SHA256: 8533d07f9ccbd7a65824b9e0459041bca34af1eb33daba48f59215593753a3b7
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils
+          curl -fsSLo /tmp/tectonic.tar.gz "${TECTONIC_URL}"
+          echo "${TECTONIC_SHA256}  /tmp/tectonic.tar.gz" | sha256sum --check
+          tar --no-same-owner -xzf /tmp/tectonic.tar.gz -C /tmp tectonic
+      - name: Compile and verify four-page report
+        env:
+          TECTONIC: /tmp/tectonic
+        run: bash scripts/verify_report.sh
