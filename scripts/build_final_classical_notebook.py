@@ -35,23 +35,28 @@ def build() -> dict:
                 "## Reproducibility contract\n\n"
                 "Run from the repository root in a Kaggle notebook with the competition data attached. "
                 "The notebook installs the pinned environment, imports only repository code, discovers "
-                "the official test directory, generates `submission-classical.csv`, and validates its schema."
+                "the official test directory, generates `submission-classical.csv`, and fully audits it. "
+                "For a local reproduction, set `SOLAR_IMAGE_DIR` and optionally `SOLAR_OUTPUT`."
             ),
             code(
                 "from pathlib import Path\n"
                 "import os, platform, subprocess, sys\n\n"
                 "REPO = Path.cwd()\n"
                 "assert (REPO / 'requirements.txt').exists(), 'Run this notebook from the repository root'\n"
-                "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-r', str(REPO / 'requirements.txt')], check=True)\n"
+                "if os.environ.get('SOLAR_SKIP_INSTALL') != '1':\n"
+                "    subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-r', str(REPO / 'requirements.txt')], check=True)\n"
+                "else:\n"
+                "    print('Using preinstalled dependencies (SOLAR_SKIP_INSTALL=1)')\n"
                 "print({'python': sys.version, 'platform': platform.platform()})"
             ),
             code(
                 "from solarfil.infer import infer_directory\n\n"
+                "override = os.environ.get('SOLAR_IMAGE_DIR')\n"
                 "candidates = [\n"
                 "    Path('/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026/test/test_images'),\n"
                 "    Path('/kaggle/input/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026/test/test_images'),\n"
                 "]\n"
-                "IMAGE_DIR = next((path for path in candidates if path.is_dir()), None)\n"
+                "IMAGE_DIR = Path(override) if override else next((path for path in candidates if path.is_dir()), None)\n"
                 "if IMAGE_DIR is None:\n"
                 "    matches = list(Path('/kaggle/input').glob('**/test/test_images'))\n"
                 "    IMAGE_DIR = matches[0] if len(matches) == 1 else None\n"
@@ -67,12 +72,13 @@ def build() -> dict:
                 "components are removed and the remaining masks are encoded as compressed COCO RLE."
             ),
             code(
-                "OUTPUT = Path('/kaggle/working/submission-classical.csv')\n"
+                "OUTPUT = Path(os.environ.get('SOLAR_OUTPUT', '/kaggle/working/submission-classical.csv'))\n"
                 "row_count = infer_directory(IMAGE_DIR, OUTPUT)\n"
                 "print({'output': str(OUTPUT), 'prediction_rows': row_count})"
             ),
             code(
                 "import csv\n"
+                "from scripts.audit_submission import audit\n"
                 "from solarfil.submission import decode_mask\n\n"
                 "with OUTPUT.open(newline='') as handle:\n"
                 "    reader = csv.DictReader(handle)\n"
@@ -91,7 +97,8 @@ def build() -> dict:
                 "height, width = Image.open(sample_image).size[::-1]\n"
                 "decoded = decode_mask(sample['segmentation_rle'], (height, width))\n"
                 "assert decoded.shape == (height, width) and decoded.any()\n"
-                "print({'rows': len(submission), 'images_with_predictions': len(submitted_ids), 'schema': 'valid'})\n"
+                "receipt = audit(OUTPUT, IMAGE_DIR)\n"
+                "print({'rows': len(submission), 'images_with_predictions': len(submitted_ids), 'schema': 'valid', 'audit': receipt})\n"
                 "submission[:5]"
             ),
             markdown(

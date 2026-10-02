@@ -12,7 +12,16 @@ class FinalMaterialsTest(unittest.TestCase):
         notebook = json.loads((ROOT / "kaggle/final_classical_pipeline.ipynb").read_text())
         self.assertEqual(4, notebook["nbformat"])
         source = "\n".join("".join(cell.get("source", [])) for cell in notebook["cells"])
-        for required in ("infer_directory", "submission-classical.csv", "55113085", "decode_mask"):
+        for required in (
+            "infer_directory",
+            "submission-classical.csv",
+            "55113085",
+            "decode_mask",
+            "SOLAR_IMAGE_DIR",
+            "SOLAR_OUTPUT",
+            "SOLAR_SKIP_INSTALL",
+            "audit(OUTPUT, IMAGE_DIR)",
+        ):
             self.assertIn(required, source)
 
     def test_report_has_required_sections_and_honest_results(self):

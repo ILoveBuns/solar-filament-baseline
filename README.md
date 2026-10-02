@@ -68,6 +68,9 @@ python scripts/audit_submission.py \
 The final route has been executed over all 180 available official test images.
 Its deterministic output and full structural audit receipt are recorded in
 [`FINAL_CLASSICAL_EXECUTION.md`](FINAL_CLASSICAL_EXECUTION.md).
+The final notebook accepts `SOLAR_IMAGE_DIR` and `SOLAR_OUTPUT` for local
+verification while retaining its default Kaggle paths; `SOLAR_SKIP_INSTALL=1`
+may be used only when the exact pinned dependencies are already installed.
 
 For the final competition handoff, use the self-contained
 [`kaggle/final_classical_pipeline.ipynb`](kaggle/final_classical_pipeline.ipynb).

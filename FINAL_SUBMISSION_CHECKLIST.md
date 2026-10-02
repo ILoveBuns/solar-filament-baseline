@@ -5,7 +5,7 @@ Deadline recorded from the official competition announcement: **2026-11-15**. Re
 | Requirement | Current evidence | State / next action |
 |---|---|---|
 | Strongest verified method | Classical pipeline, platform ref `55113085`, public score `0.48` | Ready; entrant should confirm in Kaggle UI |
-| End-to-end notebook | `kaggle/final_classical_pipeline.ipynb`; equivalent CLI route completed all 180 official test images | Ready; entrant should preserve a final executed Kaggle copy |
+| End-to-end notebook | All four code cells in `kaggle/final_classical_pipeline.ipynb` completed locally against all 180 official test images; receipt matches CLI and July output | Ready; entrant should preserve a final Kaggle-hosted copy |
 | Pinned environment | Minimal final route in `requirements.txt`; non-selected experiments in `requirements-experiments.txt` | Ready; final notebook installs only the final route |
 | Public source repository | Source and MIT license present | **Blocked on entrant authorization:** repository is still private |
 | Four-page technical report | Sources plus `report/solar-filament-report.pdf`; automated gate in `scripts/verify_report.sh` | Ready: exactly four pages, embedded fonts, no overflow or undefined references; entrant must confirm author/affiliation |

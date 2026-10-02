@@ -1,7 +1,8 @@
 # Final classical execution evidence
 
-This receipt records a complete local execution against the 180 official test
-images on 2026-10-02. Competition data and the generated CSV remain untracked.
+This receipt records complete local CLI and final-notebook executions against
+the 180 official test images on 2026-10-02. Competition data and generated
+CSVs remain untracked.
 
 ## Environment and command
 
@@ -21,6 +22,20 @@ python scripts/audit_submission.py \
   data/official/MAGFiLO_1.0_Kaggle_2026/test/test_images
 ```
 
+The final notebook also supports a local verification without changing its
+default Kaggle paths:
+
+```bash
+SOLAR_IMAGE_DIR=data/official/MAGFiLO_1.0_Kaggle_2026/test/test_images \
+SOLAR_OUTPUT=/tmp/submission-classical.csv \
+SOLAR_SKIP_INSTALL=1 \
+python scripts/execute_notebook_cells.py kaggle/final_classical_pipeline.ipynb
+```
+
+`SOLAR_SKIP_INSTALL=1` is only for an environment where the exact pinned
+requirements are already installed. On Kaggle the variable is absent, so the
+notebook installs `requirements.txt` and uses its normal `/kaggle` paths.
+
 The inference completed in 13 minutes on CPU. The audit validates the exact
 header, image coverage, unique and consecutive IDs, 64-instance limit, COCO
 RLE validity, source-image dimensions, minimum area and pairwise disjointness.
@@ -38,8 +53,14 @@ RLE validity, source-image dimensions, minimum area and pairwise disjointness.
 | Total foreground area | 77,426,928 pixels |
 | Overlapping pixels | 0 |
 
-The newly generated CSV was also byte-for-byte identical to the preserved
-July output (`outputs/submission.csv`) with the same SHA-256. This proves that
-the selected final route is deterministic for the available official test
-set. It does not replace the entrant's final Kaggle notebook execution or
-submission confirmation.
+All four code cells from `kaggle/final_classical_pipeline.ipynb` were then
+executed sequentially in one namespace using the checked-in executor, exact
+pinned dependencies, and local path overrides. The notebook itself reported 180
+input images, 11,520 prediction rows, 180 audited images, zero overlaps, and
+the same receipt above before exiting successfully.
+
+The CLI output and notebook output were both byte-for-byte identical to the
+preserved July output (`outputs/submission.csv`) with the same SHA-256. This
+proves that the selected final route is deterministic for the available
+official test set. It does not replace the entrant's final Kaggle submission
+confirmation.
