@@ -59,8 +59,9 @@ python -m solarfil.infer \
 
 For the final competition handoff, use the self-contained
 [`kaggle/final_classical_pipeline.ipynb`](kaggle/final_classical_pipeline.ipynb).
-The report draft and requirement-by-requirement release gates are in
-[`report/technical_report.md`](report/technical_report.md) and
+The report source in the organizer's `acmart/sigconf` format and the
+requirement-by-requirement release gates are in
+[`report/main.tex`](report/main.tex) and
 [`FINAL_SUBMISSION_CHECKLIST.md`](FINAL_SUBMISSION_CHECKLIST.md).
 
 ## Next experiments

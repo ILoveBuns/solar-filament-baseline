@@ -23,6 +23,16 @@ class FinalMaterialsTest(unittest.TestCase):
         self.assertIn("0.48", report)
         self.assertIn("not claimed as our result", report)
 
+    def test_latex_report_uses_competition_template_and_score_provenance(self):
+        report = (ROOT / "report/main.tex").read_text()
+        self.assertIn(r"\documentclass[sigconf]{acmart}", report)
+        self.assertIn(r"\subtitle{A Solution to the Solar Filament Segmentation Challenge 2026}", report)
+        self.assertIn("55113085", report)
+        self.assertIn("55354276", report)
+        self.assertIn("55354612", report)
+        self.assertIn("do not attribute that score to our entry", report)
+        self.assertIn(r"\section{Acknowledgment}", report)
+
     def test_requirements_are_exactly_pinned(self):
         lines = (ROOT / "requirements.txt").read_text().splitlines()
         self.assertTrue(lines)

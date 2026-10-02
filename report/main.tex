@@ -1,0 +1,142 @@
+\documentclass[sigconf]{acmart}
+\input{preamble}
+
+\begin{document}
+\title{Robust Radial Normalization for Solar Filament Instance Segmentation}
+\subtitle{A Solution to the Solar Filament Segmentation Challenge 2026}
+\author{ILoveBuns}
+\affiliation{\country{China}}
+\email{1280401315+ILoveBuns@users.noreply.github.com}
+
+\begin{abstract}
+We present a deterministic, CPU-friendly instance-segmentation pipeline for
+solar filaments. The method removes center-to-limb brightness variation with
+robust radial normalization, identifies dark filament candidates relative to
+the visible solar disk, separates them into connected components, filters small
+components, and emits compressed COCO run-length encodings. Our strongest
+official Kaggle submission is platform reference \texttt{55113085}, with a
+public score of \textbf{0.48}. This is higher than our later Mask R-CNN (0.31)
+and frozen public YOLO plus U-Net (0.34) experiments. The classical pipeline is
+therefore the selected final method. Its principal advantages are
+reproducibility, low compute cost, and transparent failure modes.
+\end{abstract}
+\maketitle
+
+\section{Introduction}
+This report describes our submitted solution to the Solar Filament
+Segmentation Challenge 2026 \cite{competition}, organized by the Earth-Space AI
+Research Lab. The challenge uses GONG H-$\alpha$ observations and evaluates
+pixel-level masks for individual solar filaments with Panoptic Quality (PQ)
+\cite{kirillov2019panoptic}. In addition to overlap, the evaluation penalizes
+false detections, missed instances, fragmentation, and over-merging.
+
+Solar full-disk images exhibit strong center-to-limb brightness variation. A
+fixed global threshold therefore confounds the dark limb and background with
+actual filament material. Our contribution is an intentionally simple,
+inspectable correction and grouping pipeline. We do not claim a new neural
+architecture. Instead, we report the method that produced our highest verified
+platform score, distinguish official scores from local checks, and provide an
+end-to-end notebook that needs no weights or private supporting files.
+
+\section{Methodology}\label{sec:methodology}
+\subsection{Input and radial normalization}
+Official JPEG inputs are converted to grayscale. For an image of height $H$ and
+width $W$, we use its geometric center and a disk radius
+$r_d=0.48\min(H,W)$. Disk pixels are divided into 96 radial bins. For every bin
+$b$, the background profile $P_b$ is its upper-quartile intensity. The upper
+quartile is less sensitive than the mean to dark filament contamination. A
+pixel $x$ in bin $b(x)$ is normalized as
+\begin{equation}
+  N(x)=\frac{I(x)}{\max(P_{b(x)},10^{-6})}.
+\end{equation}
+This operation removes broad radial illumination variation while preserving
+localized dark structures. Pixels outside the estimated disk are never
+considered filament candidates.
+
+\subsection{Candidate extraction and instance generation}
+Within the disk, we compute the 25th percentile $q_{0.25}$ of normalized
+intensity and set
+\begin{equation}
+  \tau=\min(q_{0.25},0.95).
+\end{equation}
+Pixels satisfying $N(x)\leq\tau$ form the candidate foreground. Four-connected
+component labeling converts this foreground into instances. During submitted
+inference, components smaller than 20 pixels are removed and no more than the
+64 largest components per image are retained. Accepted masks are encoded as
+compressed COCO RLE \cite{lin2014coco}. Sorting input paths and component sizes
+makes the output deterministic for fixed data and dependencies.
+
+The complete prediction path is implemented in \texttt{solarfil/infer.py} and
+\texttt{solarfil/segment.py}. The supplied final notebook installs the pinned
+environment, finds the official test directory, runs every test image, writes
+the required two-column CSV, checks unique identifiers and nonempty encodings,
+and decodes a sample RLE to verify its dimensions. It performs no training,
+downloads no model, and calls no inference service.
+
+\section{Evaluation and model selection}\label{sec:evaluation}
+Table~\ref{tab:results} lists official public scores displayed for our Kaggle
+submissions. They are platform results, not synthetic local estimates. The
+0.48 classical run remains the strongest verified route. Both later learned
+routes scored lower, so we froze them instead of selecting a more complex
+method on architectural appeal alone.
+
+\begin{table}[h]
+\caption{Official public leaderboard results for our submissions.}
+\label{tab:results}
+\centering
+\begin{tabular}{lrr}
+\toprule
+Method & Reference & Score \\
+\midrule
+Radial normalization + components & 55113085 & \textbf{0.48} \\
+Torchvision Mask R-CNN & 55354276 & 0.31 \\
+Public YOLO + U-Net refiner & 55354612 & 0.34 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The upstream public YOLO notebook reported a score of 0.69 for its original
+author. We do not attribute that score to our entry. Our adapted inference run
+is the 0.34 result shown above. This distinction is important because the final
+submission should be judged from reproducible entrant-owned outputs rather
+than a third party's leaderboard record.
+
+The classical method runs in approximately linear time in the number of image
+pixels, apart from component bookkeeping, and uses CPU memory for one image and
+one integer label map at a time. Unit tests exercise synthetic filament
+recovery, disjoint-mask handling, connected-component scoring, and exact COCO
+RLE round trips. These tests establish implementation invariants; they are not
+substitutes for the official hidden evaluation.
+
+\section{Limitations and reproducibility}
+Intensity connectivity is not a semantic model. A filament whose contrast is
+interrupted may fragment into several components, while neighboring filaments
+that touch after thresholding may merge. Bright active regions and acquisition
+artifacts can distort the radial profile. A fixed geometric disk can be less
+accurate than per-image limb estimation, and the minimum-area threshold can
+discard true fine structures. Finally, public leaderboard performance may not
+equal the final evaluation result.
+
+The public release package comprises the MIT-licensed source, exact
+\texttt{requirements.txt}, and
+\texttt{kaggle/final\_classical\_pipeline.ipynb}. A reviewer attaches the
+official competition dataset and runs the notebook from the repository root;
+it produces \texttt{/kaggle/working/submission-classical.csv} without any
+checkpoint or untracked input. Competition images and generated submissions
+are intentionally not redistributed in Git.
+
+AI assistance was used to help implement, test, and document repository
+materials. No AI-generated number is presented as an evaluation result. The
+entrant remains responsible for executing the notebook, verifying the three
+platform references, understanding the method, and submitting the final
+repository and report.
+
+\balance
+\section{Acknowledgment}
+This challenge utilizes the MAGFiLO dataset for evaluation of segmentation
+algorithms. We thank the competition organizers, the National Solar
+Observatory, and the GONG program for providing the task and observations.
+
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{main}
+\end{document}
