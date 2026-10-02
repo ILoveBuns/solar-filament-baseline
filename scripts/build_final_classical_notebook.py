@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+OUTPUT = ROOT / "kaggle" / "final_classical_pipeline.ipynb"
+
+
+def markdown(source: str) -> dict:
+    return {"cell_type": "markdown", "metadata": {}, "source": source.splitlines(keepends=True)}
+
+
+def code(source: str) -> dict:
+    return {
+        "cell_type": "code",
+        "execution_count": None,
+        "metadata": {},
+        "outputs": [],
+        "source": source.splitlines(keepends=True),
+    }
+
+
+def build() -> dict:
+    return {
+        "cells": [
+            markdown(
+                "# Solar Filament 2026 — final classical pipeline\n\n"
+                "This notebook reproduces the CPU-only radial-normalization and connected-component "
+                "pipeline used for our strongest official submission (Kaggle submission ref "
+                "`55113085`, public score `0.48`). The score is a platform result, not recomputed here."
+            ),
+            markdown(
+                "## Reproducibility contract\n\n"
+                "Run from the repository root in a Kaggle notebook with the competition data attached. "
+                "The notebook installs the pinned environment, imports only repository code, discovers "
+                "the official test directory, generates `submission-classical.csv`, and validates its schema."
+            ),
+            code(
+                "from pathlib import Path\n"
+                "import os, platform, subprocess, sys\n\n"
+                "REPO = Path.cwd()\n"
+                "assert (REPO / 'requirements.txt').exists(), 'Run this notebook from the repository root'\n"
+                "subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', '-r', str(REPO / 'requirements.txt')], check=True)\n"
+                "print({'python': sys.version, 'platform': platform.platform()})"
+            ),
+            code(
+                "from solarfil.infer import infer_directory\n\n"
+                "candidates = [\n"
+                "    Path('/kaggle/input/competitions/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026/test/test_images'),\n"
+                "    Path('/kaggle/input/filament-segmentation-2026/MAGFiLO_1.0_Kaggle_2026/test/test_images'),\n"
+                "]\n"
+                "IMAGE_DIR = next((path for path in candidates if path.is_dir()), None)\n"
+                "if IMAGE_DIR is None:\n"
+                "    matches = list(Path('/kaggle/input').glob('**/test/test_images'))\n"
+                "    IMAGE_DIR = matches[0] if len(matches) == 1 else None\n"
+                "assert IMAGE_DIR is not None, 'Attach the official competition dataset'\n"
+                "images = sorted(IMAGE_DIR.glob('*.jpeg'))\n"
+                "assert images, f'No JPEG test images under {IMAGE_DIR}'\n"
+                "print({'test_directory': str(IMAGE_DIR), 'image_count': len(images)})"
+            ),
+            markdown(
+                "## Inference\n\n"
+                "Each image is radially normalized with robust annular statistics. Pixels in the dark "
+                "disk-relative tail become candidates; four-connected components form instances; tiny "
+                "components are removed and the remaining masks are encoded as compressed COCO RLE."
+            ),
+            code(
+                "OUTPUT = Path('/kaggle/working/submission-classical.csv')\n"
+                "row_count = infer_directory(IMAGE_DIR, OUTPUT)\n"
+                "print({'output': str(OUTPUT), 'prediction_rows': row_count})"
+            ),
+            code(
+                "import pandas as pd\n"
+                "from solarfil.submission import decode_mask\n\n"
+                "submission = pd.read_csv(OUTPUT)\n"
+                "assert list(submission.columns) == ['filament_id', 'segmentation_rle']\n"
+                "assert not submission.empty\n"
+                "assert submission.filament_id.is_unique\n"
+                "assert submission.segmentation_rle.map(lambda value: isinstance(value, str) and bool(value)).all()\n"
+                "known_ids = {path.stem for path in images}\n"
+                "submitted_ids = {value.rsplit('_', 1)[0] for value in submission.filament_id}\n"
+                "assert submitted_ids <= known_ids\n"
+                "sample = submission.iloc[0]\n"
+                "sample_image = next(path for path in images if path.stem == sample.filament_id.rsplit('_', 1)[0])\n"
+                "from PIL import Image\n"
+                "height, width = Image.open(sample_image).size[::-1]\n"
+                "decoded = decode_mask(sample.segmentation_rle, (height, width))\n"
+                "assert decoded.shape == (height, width) and decoded.any()\n"
+                "print({'rows': len(submission), 'images_with_predictions': len(submitted_ids), 'schema': 'valid'})\n"
+                "submission.head()"
+            ),
+            markdown(
+                "## Submission and disclosure\n\n"
+                "Download `/kaggle/working/submission-classical.csv` and submit it through the official "
+                "competition interface. The implementation is deterministic for a fixed dataset and dependency "
+                "set. No pretrained weights, external datasets, or network inference services are used. "
+                "AI-assisted coding was used to help prepare and review repository materials; the method, "
+                "outputs, score claims, and final submission remain the entrant's responsibility."
+            ),
+        ],
+        "metadata": {
+            "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+            "language_info": {"name": "python", "version": "3.11"},
+        },
+        "nbformat": 4,
+        "nbformat_minor": 5,
+    }
+
+
+if __name__ == "__main__":
+    OUTPUT.write_text(json.dumps(build(), indent=1) + "\n")
+    print(OUTPUT)

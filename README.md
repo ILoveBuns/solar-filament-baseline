@@ -57,6 +57,12 @@ python -m solarfil.infer \
   outputs/submission.csv
 ```
 
+For the final competition handoff, use the self-contained
+[`kaggle/final_classical_pipeline.ipynb`](kaggle/final_classical_pipeline.ipynb).
+The report draft and requirement-by-requirement release gates are in
+[`report/technical_report.md`](report/technical_report.md) and
+[`FINAL_SUBMISSION_CHECKLIST.md`](FINAL_SUBMISSION_CHECKLIST.md).
+
 ## Next experiments
 
 - Tune threshold and minimum area by observatory/site.
