@@ -34,9 +34,13 @@ python -m unittest discover -s tests -v
 Tests cover morphology recovery on a synthetic limb-darkened disk and exact
 COCO RLE round-trip.
 
-The pinned [`requirements.txt`](requirements.txt) records the tested Python
-package versions. The Kaggle GPU run additionally records its OS, CUDA, GPU,
-PyTorch and torchvision versions in the notebook output.
+The pinned [`requirements.txt`](requirements.txt) is the complete, minimal
+environment for the selected CPU classical pipeline. The non-selected GPU
+experiments use the separately pinned
+[`requirements-experiments.txt`](requirements-experiments.txt), so reproducing
+the final 0.48 route does not install an unused multi-gigabyte deep-learning
+stack. GPU notebooks additionally record OS, CUDA, GPU, PyTorch and torchvision
+versions in their output.
 
 Run a real MAGFiLO validation subset:
 

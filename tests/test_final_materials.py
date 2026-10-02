@@ -35,8 +35,24 @@ class FinalMaterialsTest(unittest.TestCase):
 
     def test_requirements_are_exactly_pinned(self):
         lines = (ROOT / "requirements.txt").read_text().splitlines()
-        self.assertTrue(lines)
+        self.assertEqual(
+            {line.split("==", 1)[0].lower() for line in lines},
+            {"numpy", "pillow", "pycocotools", "scipy"},
+        )
         self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_.-]+==[^=\s]+", line) for line in lines))
+
+        experiments = (ROOT / "requirements-experiments.txt").read_text().splitlines()
+        self.assertEqual("-r requirements.txt", experiments[0])
+        self.assertTrue(all(
+            re.fullmatch(r"[A-Za-z0-9_.-]+==[^=\s]+", line)
+            for line in experiments[1:]
+        ))
+
+    def test_final_notebook_does_not_depend_on_experimental_stack(self):
+        notebook = json.loads((ROOT / "kaggle/final_classical_pipeline.ipynb").read_text())
+        source = "\n".join("".join(cell.get("source", [])) for cell in notebook["cells"])
+        for excluded in ("pandas", "torch", "torchvision", "ultralytics", "cv2", "sklearn"):
+            self.assertNotIn(excluded, source)
 
 
 if __name__ == "__main__":

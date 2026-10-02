@@ -142,7 +142,7 @@ print(json.dumps(report, indent=2))
                 "submission is accepted and scored. It downloads and verifies the frozen public "
                 "weights, then performs inference only."
             ),
-            code("%pip install -q ultralytics"),
+            code("%pip install -q -r requirements-experiments.txt"),
             code(cells[1]["source"]),
             code(accelerator_check),
             code(cells[2]["source"]),
