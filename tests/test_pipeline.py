@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from solarfil.metrics import dice
 from solarfil.calibration import (
@@ -19,12 +20,43 @@ from solarfil.coco_data import (
     select_best_image_records,
     stable_stratified_split,
 )
-from solarfil.evaluate import label_overlap_metrics, matched_dice, matched_label_dice
+from solarfil.evaluate import evaluate_dataset, label_overlap_metrics, matched_dice, matched_label_dice
+from solarfil.infer import infer_directory
 from solarfil.segment import segment_instances
 from solarfil.submission import decode_mask, make_masks_disjoint, write_submission
 
 
 class PipelineTest(unittest.TestCase):
+    def test_inference_exposes_calibrated_parameters_without_changing_defaults(self):
+        labels = np.zeros((4, 4), dtype=np.int32)
+        labels[1:3, 1:3] = 1
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            image_dir = root / "images"
+            image_dir.mkdir()
+            from PIL import Image
+            Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(image_dir / "sample.jpeg")
+            with patch("solarfil.infer.segment_labels", return_value=(labels, [1])) as mocked:
+                rows = infer_directory(
+                    image_dir,
+                    root / "submission.csv",
+                    darkness_quantile=0.2,
+                    min_area=48,
+                    max_normalized_intensity=0.9,
+                    max_instances=12,
+                )
+
+            self.assertEqual(1, rows)
+            mocked.assert_called_once()
+            self.assertEqual(0.2, mocked.call_args.kwargs["darkness_quantile"])
+            self.assertEqual(48, mocked.call_args.kwargs["min_area"])
+            self.assertEqual(0.9, mocked.call_args.kwargs["max_normalized_intensity"])
+            self.assertEqual(12, mocked.call_args.kwargs["max_instances"])
+
+    def test_evaluation_rejects_negative_offset_before_loading_data(self):
+        with self.assertRaisesRegex(ValueError, "offset must be non-negative"):
+            evaluate_dataset(Path("missing"), offset=-1)
+
     def test_make_masks_disjoint_preserves_priority_and_drops_empty_masks(self):
         first = np.zeros((4, 4), dtype=bool)
         first[1:3, 1:3] = True
@@ -214,6 +246,43 @@ class PipelineTest(unittest.TestCase):
         _, diagnostics = label_overlap_metrics(labels, [1, 2, 3], truths, 0.1)
         self.assertEqual(1, diagnostics["one_to_many_truths"])
         self.assertEqual(1, diagnostics["many_to_one_predictions"])
+
+    def test_label_panoptic_quality_penalizes_duplicate_predictions(self):
+        labels = np.zeros((5, 10), dtype=np.int32)
+        labels[1:4, 1:4] = 1
+        labels[1:4, 6:9] = 2
+        truth = np.zeros((5, 10), dtype=np.uint8)
+        truth[1:4, 1:4] = 1
+
+        scores, diagnostics = label_overlap_metrics(labels, [1, 2], [truth])
+
+        self.assertEqual([1.0], scores)
+        self.assertEqual(1, diagnostics["true_positives"])
+        self.assertEqual(1, diagnostics["false_positives"])
+        self.assertEqual(0, diagnostics["false_negatives"])
+        self.assertAlmostEqual(1.0, diagnostics["matched_iou_sum"])
+        self.assertAlmostEqual(
+            2 / 3,
+            panoptic_quality(
+                diagnostics["matched_iou_sum"],
+                diagnostics["true_positives"],
+                diagnostics["false_positives"],
+                diagnostics["false_negatives"],
+            ),
+        )
+
+    def test_zero_overlap_is_reported_as_unmatched(self):
+        labels = np.zeros((5, 10), dtype=np.int32)
+        labels[1:4, 1:4] = 1
+        truth = np.zeros((5, 10), dtype=np.uint8)
+        truth[1:4, 6:9] = 1
+
+        scores, diagnostics = label_overlap_metrics(labels, [1], [truth])
+
+        self.assertEqual([0.0], scores)
+        self.assertEqual(1, diagnostics["unmatched_truths"])
+        self.assertEqual(1, diagnostics["unmatched_predictions"])
+        self.assertEqual(0.0, diagnostics["matched_iou_sum"])
 
 
 if __name__ == "__main__":

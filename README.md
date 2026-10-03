@@ -72,6 +72,12 @@ The final notebook accepts `SOLAR_IMAGE_DIR` and `SOLAR_OUTPUT` for local
 verification while retaining its default Kaggle paths; `SOLAR_SKIP_INSTALL=1`
 may be used only when the exact pinned dependencies are already installed.
 
+An alternative instance-count calibration is documented in
+[`PQ_CALIBRATION.md`](PQ_CALIBRATION.md). On a disjoint 10-image official-label holdout it more than
+doubled local Panoptic Quality while sharply reducing false positives, and its separate 180-image
+CSV passed the full structural audit. It remains a **candidate**, not the selected final route,
+until a Kaggle submission verifies that the official platform score exceeds `0.48`.
+
 For the final competition handoff, use the self-contained
 [`kaggle/final_classical_pipeline.ipynb`](kaggle/final_classical_pipeline.ipynb).
 The report source in the organizer's `acmart/sigconf` format and the
@@ -94,7 +100,8 @@ undefined references; CI runs the same gate from a pinned Tectonic archive.
 - Add orientation-aware closing to reconnect thin barbs.
 - Train and threshold-sweep the torchvision Mask R-CNN on a Kaggle GPU.
 - Compare Mask R-CNN with a semantic U-Net plus watershed instance recovery.
-- Compare alternative architectures with the official Panoptic Quality metric.
+- Compare the audited PQ-calibrated classical candidate on the official leaderboard without
+  replacing the preserved `0.48` route unless the platform verifies an improvement.
 
 No synthetic score is represented as an official leaderboard score.
 
