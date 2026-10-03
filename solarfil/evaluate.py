@@ -10,6 +10,7 @@ import numpy as np
 from PIL import Image
 from pycocotools import mask as mask_utils
 
+from .calibration import match_panoptic_iou, panoptic_quality
 from .metrics import dice
 from .segment import segment_labels
 
@@ -46,7 +47,7 @@ def label_overlap_metrics(
     label_ids: list[int],
     truths: list[np.ndarray],
     overlap_threshold: float = 0.1,
-) -> tuple[list[float], dict[str, int]]:
+) -> tuple[list[float], dict[str, float | int]]:
     """Return greedy Dice scores and instance-fragmentation diagnostics.
 
     The overlap graph is diagnostic rather than a reimplementation of the
@@ -57,6 +58,8 @@ def label_overlap_metrics(
     candidates: list[tuple[float, int, int]] = []
     truth_degrees = np.zeros(len(truths), dtype=np.int32)
     prediction_degrees = {label_id: 0 for label_id in label_ids}
+    iou_matrix = np.zeros((len(label_ids), len(truths)), dtype=np.float64)
+    label_positions = {label_id: position for position, label_id in enumerate(label_ids)}
     # One label histogram per truth yields every pairwise intersection without
     # rescanning the full-resolution image for every predicted component.
     for truth_id, truth in enumerate(truths):
@@ -67,7 +70,10 @@ def label_overlap_metrics(
             area = int(sizes[label_id])
             intersection = int(intersections[label_id])
             score = 2 * intersection / (area + truth_area)
-            candidates.append((score, label_id, truth_id))
+            if intersection:
+                candidates.append((score, label_id, truth_id))
+                union = area + truth_area - intersection
+                iou_matrix[label_positions[label_id], truth_id] = intersection / union
             if score >= overlap_threshold:
                 truth_degrees[truth_id] += 1
                 prediction_degrees[label_id] += 1
@@ -81,11 +87,16 @@ def label_overlap_metrics(
             used_truths.add(truth_id)
             scores.append(score)
     scores.extend([0.0] * (len(truths) - len(used_truths)))
+    matched_iou_sum, true_positives = match_panoptic_iou(iou_matrix)
     diagnostics = {
         "unmatched_truths": len(truths) - len(used_truths),
         "unmatched_predictions": len(label_ids) - len(used_labels),
         "one_to_many_truths": int(np.count_nonzero(truth_degrees > 1)),
         "many_to_one_predictions": sum(degree > 1 for degree in prediction_degrees.values()),
+        "matched_iou_sum": matched_iou_sum,
+        "true_positives": true_positives,
+        "false_positives": len(label_ids) - true_positives,
+        "false_negatives": len(truths) - true_positives,
     }
     return scores, diagnostics
 
@@ -97,12 +108,15 @@ def matched_label_dice(labels: np.ndarray, label_ids: list[int], truths: list[np
 def evaluate_dataset(
     root: Path,
     limit: int | None = None,
+    offset: int = 0,
     darkness_quantile: float = 0.25,
     min_area: int = 24,
     max_normalized_intensity: float = 0.95,
     max_instances: int = 64,
     overlap_threshold: float = 0.1,
 ) -> dict[str, float | int]:
+    if offset < 0:
+        raise ValueError("offset must be non-negative")
     annotation_path = root / "train/MAGFiLO_1.0_Annotations_kaggle2026_train.json"
     data = json.loads(annotation_path.read_text())
     images_by_id = {item["id"]: item for item in data["images"]}
@@ -113,8 +127,10 @@ def evaluate_dataset(
 
     scores: list[float] = []
     predicted_count = truth_count = 0
-    diagnostic_totals: dict[str, int] = defaultdict(int)
-    files = sorted(annotations_by_file)[:limit]
+    diagnostic_totals: dict[str, float | int] = defaultdict(int)
+    files = sorted(annotations_by_file)[offset:]
+    if limit is not None:
+        files = files[:limit]
     for filename in files:
         image = np.asarray(Image.open(root / "train/train_images" / filename).convert("L"))
         truths = [annotation_mask(x, *image.shape) for x in annotations_by_file[filename]]
@@ -137,10 +153,17 @@ def evaluate_dataset(
         gc.collect()
     result: dict[str, float | int] = {
         "images": len(files),
+        "offset": offset,
         "instances_truth": truth_count,
         "instances_predicted": predicted_count,
         "mean_matched_dice": float(np.mean(scores)) if scores else 0.0,
         "prediction_truth_ratio": predicted_count / truth_count if truth_count else 0.0,
+        "panoptic_quality": panoptic_quality(
+            float(diagnostic_totals["matched_iou_sum"]),
+            int(diagnostic_totals["true_positives"]),
+            int(diagnostic_totals["false_positives"]),
+            int(diagnostic_totals["false_negatives"]),
+        ),
     }
     result.update(diagnostic_totals)
     return result
@@ -150,6 +173,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("root", type=Path)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--darkness-quantile", type=float, default=0.25)
     parser.add_argument("--min-area", type=int, default=24)
     parser.add_argument("--max-normalized-intensity", type=float, default=0.95)
@@ -159,6 +183,7 @@ def main() -> None:
     print(json.dumps(evaluate_dataset(
         args.root,
         args.limit,
+        offset=args.offset,
         darkness_quantile=args.darkness_quantile,
         min_area=args.min_area,
         max_normalized_intensity=args.max_normalized_intensity,

@@ -1,0 +1,9 @@
+-r requirements.txt
+kagglehub==1.0.2
+opencv-python-headless==4.10.0.84
+pandas==3.0.6
+scikit-learn==1.9.1
+torch==2.10.0
+torchvision==0.25.0
+tqdm==4.70.1
+ultralytics==8.4.171
