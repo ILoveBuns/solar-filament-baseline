@@ -73,8 +73,8 @@ verification while retaining its default Kaggle paths; `SOLAR_SKIP_INSTALL=1`
 may be used only when the exact pinned dependencies are already installed.
 
 An alternative instance-count calibration is documented in
-[`PQ_CALIBRATION.md`](PQ_CALIBRATION.md). On a disjoint 10-image official-label holdout it more than
-doubled local Panoptic Quality while sharply reducing false positives, and its separate 180-image
+[`PQ_CALIBRATION.md`](PQ_CALIBRATION.md). Across 40 disjoint, untouched official-label holdout
+images it more than doubled local Panoptic Quality while sharply reducing false positives, and its separate 180-image
 CSV passed the full structural audit. It remains a **candidate**, not the selected final route,
 until a Kaggle submission verifies that the official platform score exceeds `0.48`.
 

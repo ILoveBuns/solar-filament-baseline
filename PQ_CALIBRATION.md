@@ -47,6 +47,23 @@ unmatched predictions and therefore rewards retaining many components. This 20-i
 still small and lexically sampled; it is evidence for one platform comparison, not proof that the
 candidate beats `0.48` on the public or private leaderboard.
 
+### Extended untouched holdout
+
+After freezing the candidate, the following 30 images (offset 20) were evaluated without any
+further parameter search. They contained 298 truth instances.
+
+| Route | Predictions | Prediction/truth | Matched Dice | PQ | TP / FP / FN |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Existing 0.48 route | 1,920 | 6.44 | 0.4029 | 0.05613 | 97 / 1,823 / 201 |
+| PQ-calibrated candidate | 360 | 1.21 | 0.2188 | **0.11430** | 57 / 303 / 241 |
+
+Across both untouched slices (40 images, 364 truth instances), aggregation from the underlying
+matched-IoU and TP/FP/FN totals gives PQ `0.05092` for the existing route and `0.10480` for the
+candidate, a **2.06×** improvement. The candidate reduced false positives from 2,443 to 412. This
+second, larger confirmation was performed only after the candidate parameters were frozen, so it
+strengthens the case for one platform comparison without converting local evidence into a claimed
+leaderboard result.
+
 ## Full test-set candidate receipt
 
 The candidate was executed over all 180 available official test images as a separate ignored file:

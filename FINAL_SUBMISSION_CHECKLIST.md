@@ -10,7 +10,7 @@ Deadline recorded from the official competition announcement: **2026-11-15**. Re
 | Public source repository | Source and MIT license present | **Blocked on entrant authorization:** repository is still private |
 | Four-page technical report | Sources plus `report/solar-filament-report.pdf`; automated gate in `scripts/verify_report.sh` | Ready: exactly four pages, embedded fonts, no overflow or undefined references; entrant must confirm author/affiliation |
 | Reproducibility evidence | Unit tests, notebook schema/decode checks, and `FINAL_CLASSICAL_EXECUTION.md` (11,520 audited rows; zero overlaps; deterministic SHA-256) | Ready locally; preserve final Kaggle output before filing |
-| PQ-calibrated comparison | `PQ_CALIBRATION.md`; disjoint holdout PQ 0.0712 vs 0.0346; separate 2,160-row full CSV audited with SHA-256 `4249c75e…a8a27` | **Platform validation required:** compare only if submissions remain open; do not replace 0.48 from local evidence |
+| PQ-calibrated comparison | `PQ_CALIBRATION.md`; aggregate 40-image untouched holdout PQ 0.10480 vs 0.05092 (2.06×); separate 2,160-row full CSV audited with SHA-256 `4249c75e…a8a27` | **Platform validation required:** compare only if submissions remain open; do not replace 0.48 from local evidence |
 | Google Form submission | Organizer's final-submission form | **Entrant-only:** identity, contact details, declarations, PDF/repo links |
 
 ## Final gate
