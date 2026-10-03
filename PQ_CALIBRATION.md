@@ -64,6 +64,17 @@ second, larger confirmation was performed only after the candidate parameters we
 strengthens the case for one platform comparison without converting local evidence into a claimed
 leaderboard result.
 
+### Rejected observatory-specific cap
+
+After all holdout decisions were complete, the full training annotations were inspected only to
+decide whether a new observatory-specific experiment was justified. Mean truth counts by suffix
+ranged narrowly from `10.38` (Mh) to `12.73` (Bh); medians were 9 or 10 at every site, and the
+interquartile ranges overlapped heavily (approximately 5–16). The global mean was `11.60`.
+
+Those distributions do not support six separate instance caps, especially after the frozen global
+cap of 12 generalized consistently. No site-specific parameters were introduced and no additional
+candidate was selected from this post-hoc inspection.
+
 ## Full test-set candidate receipt
 
 The candidate was executed over all 180 available official test images as a separate ignored file:
